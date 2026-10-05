@@ -2,7 +2,7 @@ import { tx, req, put } from './db.js';
 // Exact-text dictionary. A watcher swaps matching text on screen, so every page is covered without changing each file.
 const P = (ru, ur) => ({ ru, ur });
 const W = {
-  Sell: P('Farokht', 'فروخت'), Receipts: P('Raseedein', 'رسیدیں'), Money: P('Paisa', 'پیسہ'), More: P('Mazeed', 'مزید'), Review: P('Dekhein', 'دیکھیں'),
+  Sell: P('Farokht', 'فروخت'), Receipts: P('Raseedein', 'رسیدیں'), Money: P('Paisa', 'پیسہ'), Shop: P('Dukaan', 'دکان'), Review: P('Dekhein', 'دیکھیں'),
   'Make bill': P('Bill banayein', 'بل بنائیں'), 'Your bill': P('Aap ka bill', 'آپ کا بل'), Udhaar: P('Udhaar', 'ادھار'), Expenses: P('Kharchay', 'اخراجات'),
   'Stock lots': P('Maal ke lot', 'مال کے لاٹ'), 'Close the day': P('Din band karein', 'دن بند کریں'), Reports: P('Reports', 'رپورٹس'), Settings: P('Settings', 'ترتیبات'),
   Cash: P('Naqad', 'نقد'), Credit: P('Udhaar', 'ادھار'), Hold: P('Rok lein', 'روکیں'), Clear: P('Saaf karein', 'صاف کریں'), Total: P('Kul', 'کل'),
