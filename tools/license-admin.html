@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>License admin</title></head>
+<body style="font-family:system-ui;max-width:640px;margin:20px auto;padding:0 16px">
+<h1>License admin (developer only, never deploy)</h1>
+<p>1. Generate a key pair once. Paste the PUBLIC key into config.js. Keep the PRIVATE key secret.</p>
+<button id="gen">Generate key pair</button>
+<p>Public key<br><textarea id="pub" rows="3" style="width:100%"></textarea></p>
+<p>Private key<br><textarea id="priv" rows="3" style="width:100%"></textarea></p>
+<p>2. Make a code: <input id="shop" placeholder="Shop name"> <input id="exp" placeholder="Expiry 2027-12-31 (optional)"> <button id="sign">Make code</button></p>
+<textarea id="out" rows="4" style="width:100%"></textarea><script src="license-admin.js"></script></body></html>

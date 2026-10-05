@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dollar Store Billing</title>
+<meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="styles.css"></head>
+<body>
+<div class="bar" aria-hidden="true"><span class="bar-title" id="barTitle"></span></div>
+<main class="view" id="view" tabindex="-1"></main>
+<nav class="tabs" id="tabs" aria-label="Main"><div class="dot-track"><span class="dot"></span></div>
+<a class="tab" data-tab="sell" href="#/sell"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12.5 12 4h7a1 1 0 0 1 1 1v7l-8.5 8.5a1.5 1.5 0 0 1-2 0l-5-5a1.5 1.5 0 0 1 0-2z"/><circle cx="8.5" cy="12" r="1" fill="currentColor"/></svg><span>Sell</span></a>
+<a class="tab" data-tab="receipts" href="#/receipts"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Receipts</span></a>
+<a class="tab" data-tab="money" href="#/money"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/></svg><span>Money</span></a>
+<a class="tab" data-tab="more" href="#/more"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg><span>More</span></a></nav>
+<script type="module" src="app.js"></script></body></html>
