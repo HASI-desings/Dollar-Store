@@ -1,4 +1,4 @@
-import { h, ask, toast, errorSheet, banner } from './ui.js';
+import { h, ask, toast, errorSheet, banner, skel } from './ui.js';
 import { tx, req, put } from './db.js';
 import * as sell from './sell.js';
 import * as receipts from './receipts.js';
@@ -16,25 +16,16 @@ import * as sync from './sync.js';
 import * as setup from './setup.js';
 import * as license from './license.js';
 import * as i18n from './i18n.js';
+import * as moneyhub from './moneyhub.js';
+import * as shop from './shop.js';
 const t = i18n.t;
 
 const empty = line => body => body.replaceChildren(h('section', { class: 'card empty' }, h('h2', {}, 'Coming soon'), h('p', { class: 'muted' }, line)));
-// Shop details are used on every receipt.
-async function more(body) {
-  const cur = (await tx(['settings'], 'readonly', s => req(s.settings.get('shop'))))?.value || {};
-  body.replaceChildren(h('section', { class: 'card' }, h('button', { class: 'btn', type: 'button', onclick: () => ask('Shop details', [
-    { k: 'name', label: 'Shop name', v: cur.name }, { k: 'address', label: 'Address', v: cur.address }, { k: 'phone', label: 'Phone', v: cur.phone }],
-  async v => { if (!v.name) return 'Enter the shop name.'; await put('settings', { key: 'shop', value: v }); toast('Saved.'); }) }, 'Shop details')),
-  h('div', { id: 'bk' }));
-  body.append(h('section', { class: 'card' }, ...[['staff', 'Staff and roles'], ['settings', 'Settings'], ['cloud', 'Cloud backup and reports']].map(([id, n]) => h('a', { class: 'lnk', href: '#/' + id }, n, h('span', {}, '›')))));
-  if (await staff.guardOwner()) await backup.mount(body.querySelector('#bk'));
-}
-const money = body => body.replaceChildren(h('section', { class: 'card' }, ...[['udhaar', 'Udhaar'], ['expenses', 'Expenses'], ['lots', 'Stock lots'], ['closeday', 'Close the day'], ['reports', 'Reports'], ['insights', 'Insights'], ['goals', 'Goals']].map(([id, n]) => h('a', { class: 'lnk', href: '#/' + id }, n, h('span', {}, '›')))));
 const PAGES = [
-  { id: 'sell', title: 'Sell', mount: sell.mount }, { id: 'receipts', title: 'Receipts', mount: receipts.mount },
-  { id: 'money', title: 'Money', mount: money }, { id: 'more', title: 'More', mount: more }];
-const guard = f => async b => { if (await staff.guardOwner()) return f(b); empty('Owner PIN needed.')(b); };
-const SUBS = [{ id: 'udhaar', title: 'Udhaar', tab: 2, mount: udhaar.mount }, { id: 'expenses', title: 'Expenses', tab: 2, mount: expenses.mount }, { id: 'lots', title: 'Stock lots', tab: 2, mount: lots.mount }, { id: 'closeday', title: 'Close the day', tab: 2, mount: closeday.mount }, { id: 'reports', title: 'Reports', tab: 2, mount: reports.mount }, { id: 'insights', title: 'Insights', tab: 2, mount: insights.mount }, { id: 'goals', title: 'Goals', tab: 2, mount: goals.mount }, { id: 'staff', title: 'Staff and roles', tab: 3, mount: guard(staff.mount) }, { id: 'settings', title: 'Settings', tab: 3, mount: guard(settings.mount) }, { id: 'cloud', title: 'Cloud backup', tab: 3, mount: guard(sync.mount) }];
+  { id: 'sell', title: 'Sell', skel: 'grid', mount: sell.mount }, { id: 'receipts', title: 'Receipts', mount: receipts.mount },
+  { id: 'money', title: 'Money', mount: moneyhub.mount }, { id: 'shop', title: 'Shop', mount: shop.mount }];
+const guard = f => async b => { if (await staff.guardOwner()) return f(b); empty('Owner only.')(b); };
+const SUBS = [{ id: 'staff', title: 'Staff and roles', tab: 3, mount: guard(staff.mount) }, { id: 'settings', title: 'Settings', tab: 3, mount: guard(settings.mount) }, { id: 'cloud', title: 'Cloud backup', tab: 3, mount: guard(sync.mount) }];
 const view = document.getElementById('view'), tabs = document.getElementById('tabs'), barTitle = document.getElementById('barTitle');
 let current = -1;
 
@@ -45,7 +36,7 @@ function errorEl(e) {
 function route() {
   const p = [...PAGES, ...SUBS].find(x => x.id === location.hash.replace('#/', ''));
   if (!p) { location.replace('#/sell'); return; }
-  const i = p.tab ?? PAGES.indexOf(p), body = h('div', {}, h('div', { class: 'skel' }));
+  const i = p.tab ?? PAGES.indexOf(p), body = h('div', {}, skel(p.skel || 'list'));
   view.style.setProperty('--dx', (i >= current ? 12 : -12) + 'px'); current = i;
   const chip = h('span', { class: 'chip', id: 'chip' }, 'Offline');
   view.replaceChildren(h('header', { class: 'head' }, h('div', {}, p.tab != null ? h('a', { class: 'back', href: '#/' + PAGES[p.tab].id }, '‹ ' + t(PAGES[p.tab].title)) : null, h('h1', {}, t(p.title))), p.id === 'sell' ? chip : null), body);
@@ -74,8 +65,11 @@ addEventListener('online', updateChip); addEventListener('offline', updateChip);
 // A new service worker waits until the app is fully closed, so an open bill is never interrupted.
 async function checkDue() {
   try {
-    if (await backup.dueCheck()) banner('Backup due. Save a backup file.', [{ label: 'Open', run: () => { location.hash = '#/more'; } }]);
+    if (await backup.dueCheck()) banner('Backup due. Save a backup file.', [{ label: 'Open', run: () => { location.hash = '#/shop'; } }]);
     if (await sync.dueCheck()) banner('Cloud backup is due.', [{ label: 'Open', run: () => { location.hash = '#/cloud'; } }]);
+    if ((await shop.usage()) > 524288000) banner('Local data is over 500 MB. Back up now for safety.', [{ label: 'Open', run: () => { location.hash = '#/shop'; } }]);
+    const n = await staff.unseen();
+    if (n) banner(n + ' staff action' + (n > 1 ? 's' : '') + ' since your last visit.', [{ label: 'View', run: () => { location.hash = '#/staff'; } }]);
   } catch (e) { toast('Could not check backups.'); }
 }
 // Install banner (a UI flag only, not business data).
