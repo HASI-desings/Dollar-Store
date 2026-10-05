@@ -2,7 +2,7 @@ import { h, toast } from './ui.js';
 import { all, tx, req, uid } from './db.js';
 import { rs, refundAmount } from './money.js';
 import { showReceipt } from './sell.js';
-import { current } from './staff.js';
+import { current, requirePin, notify } from './staff.js';
 
 export async function mount(root) {
   const sales = (await all('sales')).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
@@ -24,7 +24,8 @@ export async function mount(root) {
       if (picked.size) btn.removeAttribute('disabled'); else btn.setAttribute('disabled', 'disabled');
     };
     btn.addEventListener('click', async () => {
-      try { await refund(s, [...picked], reason.value); toast('Refund saved.'); await mount(root); }
+      if (!(await requirePin('Refund'))) return;
+      try { await refund(s, [...picked], reason.value, true); await notify('refund on ' + s.receipt_no, s.id); toast('Refund saved.'); await mount(root); }
       catch (e) { toast(e.message === 'done' ? 'This item was already refunded.' : e.message === 'perm' ? 'This cashier cannot refund.' : 'Could not refund. Try again.'); }
     });
     const rows = sl.map(l => {
@@ -40,8 +41,8 @@ export async function mount(root) {
 }
 
 // Validates every line inside the transaction, so nothing can be refunded twice.
-function refund(s, ids, reason) {
-  if (!current().can_refund) return Promise.reject(new Error('perm'));
+function refund(s, ids, reason, approved) {
+  if (!approved && !current().can_refund) return Promise.reject(new Error('perm'));
   return tx(['sale_lines', 'refunds', 'activity_log'], 'readwrite', async st => {
     let sum = 0; const qty = {};
     for (const id of ids) {
