@@ -2,7 +2,7 @@ import { h, toast, sheet, ask } from './ui.js';
 import { all, put, tx, req, uid } from './db.js';
 import { rs, subtotal, receiptNo, waNumber } from './money.js';
 import { t } from './i18n.js';
-import { current } from './staff.js';
+import { current, notify } from './staff.js';
 
 const STARTER = ['Glass', 'Candle', 'Comb', 'Kitchen', 'Lamp', 'Toys', 'Other'];
 const METHODS = [['cash', 'Cash'], ['easypaisa', 'Easypaisa'], ['jazzcash', 'JazzCash'], ['credit', 'Credit']];
@@ -114,7 +114,7 @@ async function make(err, close) {
   if (bill.method === 'cash' && (bill.cash === '' || !Number.isInteger(c) || c < tot)) { err.textContent = 'Short by ' + rs(tot - (c || 0)) + '.'; return; }
   if (bill.method === 'credit' && !waNumber(bill.phone)) { err.textContent = 'Enter a valid phone number.'; return; }
   saving = true; err.textContent = '';
-  try { const r = await saveSale(bill); bill = fresh(); close(); draw(); if (r.clock) toast('Your phone clock looks wrong. Check the date.'); showReceipt(r.sale, r.lines); }
+  try { const r = await saveSale(bill); bill = fresh(); close(); draw(); if (r.clock) toast('Your phone clock looks wrong. Check the date.'); notify('sale ' + r.sale.receipt_no).catch(() => toast('Could not alert the owner.')); showReceipt(r.sale, r.lines); }
   catch (e) { err.textContent = e.message === 'locked' ? 'Trial ended. Enter an activation code.' : 'Could not save. Nothing was charged. Try again.'; }
   finally { saving = false; }
 }
