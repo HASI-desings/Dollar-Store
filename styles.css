@@ -51,7 +51,6 @@ button,input,select{font:inherit;color:inherit}
 .grab{width:36px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 16px}.sheet h2{margin:0 0 8px}.sheet .full{width:100%}
 @keyframes up{from{transform:translateY(100%)}to{transform:none}}
 .toast{position:fixed;z-index:70;top:calc(var(--top) + 12px);left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:999px;background:var(--ink);color:var(--on-ink);font-size:15px}
-@media(min-width:900px){body{padding-left:240px}.bar{left:240px}.tabs{top:0;left:0;bottom:0;right:auto;width:240px;height:auto;border-radius:0;flex-direction:column;justify-content:flex-start;gap:4px;padding:24px 12px;box-shadow:none;border-width:0 1px 0 0}.tabs.hide{transform:none;opacity:1}.tab{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;height:48px;padding:0 16px;border-radius:14px;font-size:17px}.tab.active{background:var(--surface-2)}.dot-track{display:none}.billbar{bottom:20px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.12s!important;transition-duration:.12s!important}.view{--dx:0px}}
 @media print{body *{visibility:hidden}.paper,.paper *{visibility:visible}.paper{position:fixed;left:0;top:0;width:72mm;padding:2mm}}
 .lnk{display:flex;justify-content:space-between;align-items:center;min-height:56px;color:var(--text);text-decoration:none;border-bottom:1px solid var(--line)}
@@ -70,4 +69,46 @@ button,input,select{font:inherit;color:inherit}
 @keyframes plus{to{transform:translateY(-28px);opacity:0}}
 .grab{position:relative;touch-action:none}.grab::before{content:"";position:absolute;inset:-14px -60px}
 .swipe{touch-action:pan-y}
-@media(min-width:900px){.banners{left:260px;bottom:20px;max-width:560px}}
+
+/* 70% white, 20% ink navy, 10% accents (yellow, green, red) */
+@media(prefers-color-scheme:light){:root{--bg:#FBFBFD;--surface-2:#F1F3F8;--line:rgba(20,33,61,.08)}}
+h1,h2{color:var(--ink)}.card,.stat-tile{box-shadow:0 1px 3px rgba(20,33,61,.05)}.hidden{display:none}
+/* Glass bottom bar on every screen size */
+.tabs{left:16px;right:16px;max-width:460px;margin:0 auto;height:68px;border-radius:30px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(30px) saturate(190%);backdrop-filter:blur(30px) saturate(190%);border:1px solid rgba(255,255,255,.65);box-shadow:0 10px 40px rgba(20,33,61,.14),inset 0 1px 0 rgba(255,255,255,.8)}
+@media(prefers-color-scheme:dark){.tabs{background:rgba(44,44,46,.5);border-color:rgba(255,255,255,.14)}}
+.dot-track{top:6px;bottom:6px;padding:0 5px;align-items:stretch}.dot{width:100%;height:auto;border-radius:24px;background:rgba(20,33,61,.09)}
+@media(prefers-color-scheme:dark){.dot{background:rgba(255,255,255,.12)}}
+.tab{transition:color 200ms,transform 300ms var(--curve)}.tab.active{transform:translateY(-1px)}.tab.active svg{animation:pop 350ms var(--curve)}@keyframes pop{40%{transform:scale(1.18)}}
+.tab.active .cut{stroke:var(--surface)}.tab[data-tab=sell].active .cut{stroke:var(--text)}
+.billbar{bottom:calc(92px + var(--bot))}.banners{bottom:calc(96px + var(--bot))}
+/* Notifications: small close button, fade out */
+.toasts{position:fixed;top:calc(var(--top) + 12px);left:0;right:0;z-index:70;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.toast{position:static;transform:none;pointer-events:auto;display:flex;align-items:center;gap:10px;transition:opacity 300ms}
+.toast.out,.banner.out{opacity:0;transition:opacity 300ms}
+.x{flex:none;width:22px;height:22px;border:0;border-radius:50%;background:rgba(127,127,127,.25);color:inherit;font-size:14px;line-height:1;cursor:pointer;padding:0}
+.banner{position:relative;padding-right:40px}.banner .x{position:absolute;top:8px;right:8px}
+/* In-app confirm */
+.backdrop.hi{z-index:75}
+.dialog{position:fixed;z-index:80;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,90vw);background:var(--surface);border-radius:20px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.2);animation:dlg 220ms var(--curve)}
+@keyframes dlg{from{opacity:0;transform:translate(-50%,-50%) scale(.96)}}.dialog p{margin:0 0 16px}
+.btn.bad{background:var(--bad);color:#fff}
+/* Spinner on busy buttons */
+.btn.loading{position:relative;color:transparent!important;pointer-events:none}
+.btn.loading::after{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.btn.sec.loading::after{border-color:rgba(20,33,61,.2);border-top-color:var(--ink)}@keyframes spin{to{transform:rotate(360deg)}}
+/* Skeletons that match the real components */
+.sk{display:block;border-radius:8px;background:var(--surface-2);position:relative;overflow:hidden}
+.sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--line),transparent);animation:shim 1.2s infinite}
+.sk.s{height:12px;width:40%;margin:6px 0}.sk.m{height:16px;width:65%;margin:6px 0}.sk.l{height:12px;width:90%;margin:8px 0}.sk.b{height:36px;width:72px;border-radius:12px;flex:none}
+.sk.btnsk{height:48px;width:120px;border-radius:14px;margin-top:12px}.sk.pillsk{height:48px;width:92px;border-radius:999px;flex:none}.sk.tagsk{height:72px;border-radius:14px}
+.sk-row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:56px;border-bottom:1px solid var(--line)}.sk-row>div{flex:1}
+/* Money tabs and summary */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}@media(min-width:700px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat-tile{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px}.stat-tile b{display:block;font-size:22px;margin-top:4px}
+.tabs2{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px}
+.tab2{flex:none;min-height:48px;padding:0 18px;border:0;border-radius:999px;background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:background 200ms,color 200ms,transform 160ms var(--curve)}
+.tab2:active{transform:scale(.97)}.tab2.on{background:var(--ink);color:var(--on-ink)}
+/* Shop page and file picker */
+.btnlink{width:100%;background:none;border:0;border-bottom:1px solid var(--line);font:inherit;cursor:pointer;text-align:left}
+.file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}.filebtn{position:relative;display:inline-flex;align-items:center;cursor:pointer}.filebtn:focus-within{outline:2px solid var(--ink);outline-offset:2px}
+details.card summary{min-height:48px;display:flex;align-items:center;cursor:pointer;font-weight:600}
