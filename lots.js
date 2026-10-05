@@ -1,4 +1,5 @@
-import { h, ask } from './ui.js';
+import { h, ask, confirmBox } from './ui.js';
+import { requirePin } from './staff.js';
 import { all, put, uid } from './db.js';
 import { rs, posInt, lotRecovery } from './money.js';
 
@@ -14,7 +15,8 @@ export async function mount(root) {
   const card = l => {
     const r = rec.get(l.id), c = l.cost + l.extra_costs, i = h('i'); i.style.setProperty('--w', Math.min(r.percent, 100) / 100);
     const close = async () => {
-      if (!confirm('Close this lot and write off ' + rs(c - r.recovered) + ' as loss?')) return;
+      if (!(await confirmBox('Close this lot and write off ' + rs(c - r.recovered) + ' as loss?', 'Close lot'))) return;
+      if (!(await requirePin('Close lot'))) return;
       await put('lots', { ...l, closed: true, written_off_amount: c - r.recovered }); await mount(root);
     };
     return h('section', { class: 'card' }, h('b', {}, l.name), h('p', { class: 'muted' }, 'Cost ' + rs(c) + ' · recovered ' + rs(r.recovered) + ' (' + r.percent + '%) · ' + Math.floor((Date.now() - new Date(l.bought_at)) / 864e5) + ' days'),
