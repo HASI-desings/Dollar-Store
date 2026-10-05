@@ -1,4 +1,5 @@
-import { h, ask, toast } from './ui.js';
+import { h, ask, toast, skel } from './ui.js';
+import { requirePin } from './staff.js';
 import { SUPABASE_URL as U, SUPABASE_ANON_KEY as K } from './config.js';
 import { all, put, tx, req, uid } from './db.js';
 import { snapshot, check, restore } from './backup.js';
@@ -37,7 +38,7 @@ async function backup(pass) {
   r = await api('/rest/v1/backups?id=eq.' + id + '&select=ciphertext'); const back = await r.json();
   if (!back[0] || (await sha(back[0].ciphertext)) !== (await sha(c64))) throw fail;
   r = await api('/rest/v1/backups?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ complete: true }) }); if (!r.ok) throw fail;
-  await summary(); await set('last_cloud_backup', Date.now());
+  await summary(); await staffSync(); await set('last_cloud_backup', Date.now());
 }
 // Plain totals for emailed reports (the backup itself stays encrypted).
 async function summary() {
@@ -51,6 +52,7 @@ async function summary() {
   if (!r.ok) throw new Error('Backup failed. Trying again.');
 }
 async function fromCloud(id, pass) {
+  if (!(await requirePin('Restore from cloud'))) throw new Error('Cancelled.');
   const b = (await (await api('/rest/v1/backups?id=eq.' + id + '&complete=eq.true&select=salt,iv,ciphertext')).json())[0];
   if (!b) throw new Error('Backup not found.');
   let plain; try { plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(b.iv) }, await key(pass, fromB64(b.salt)), fromB64(b.ciphertext)); } catch (e) { throw new Error('Wrong passphrase.'); }
@@ -60,17 +62,19 @@ async function fromCloud(id, pass) {
 }
 
 export async function mount(root) {
+  root.replaceChildren(skel('list'));
   const card = (...k) => h('section', { class: 'card' }, ...k);
   if (!U.startsWith('https://')) { root.replaceChildren(card(h('p', { class: 'muted' }, 'Cloud is not set up. Put your Supabase URL and key in config.js.'))); return; }
   const ses = await get('cloud_session'), last = await get('last_cloud_backup'), email = await get('cloud_email');
   const pass = (title, go) => ask(title, [{ k: 'p', label: 'Backup passphrase', type: 'password' }], async v => { if (v.p.length < 8) return 'Use at least 8 characters.'; try { await go(v.p); } catch (e) { return e.message; } await mount(root); });
   const signIn = () => ask('Sign in to your cloud', [{ k: 'e', label: 'Email', type: 'email' }, { k: 'p', label: 'Password', type: 'password' }], async v => { try { await auth('password', { email: v.e, password: v.p }); } catch (e) { return e.message; } await set('cloud_email', v.e); await mount(root); });
   if (!ses) { root.replaceChildren(card(h('p', { class: 'muted' }, 'Sign in with the owner account you created in your Supabase project.'), h('button', { class: 'btn', type: 'button', onclick: signIn }, 'Sign in'))); return; }
-  let list = [], rset = {}, logs = [], problem = '';
+  let list = [], rset = {}, logs = [], problem = '', server = 0;
   try {
     list = await (await api('/rest/v1/backups?complete=eq.true&select=id,created_at,size&order=created_at.desc&limit=10')).json();
     rset = (await (await api('/rest/v1/report_settings?select=*')).json())[0] || {};
     logs = await (await api('/rest/v1/report_log?select=created_at,period,status,detail&order=created_at.desc&limit=10')).json();
+    server = (await (await api('/rest/v1/backups?complete=eq.true&select=size')).json()).reduce((a, b) => a + b.size, 0);
   } catch (e) { problem = e.message; }
   const sc = await get('cloud_schedule'), due = !last || Date.now() - last > 7 * 864e5;
   const schedule = () => ask('Backup schedule', [{ k: 'd', label: 'Weekday (0 = Sunday ... 6 = Saturday)', type: 'number', v: String(sc ? sc.weekday : 0) }, { k: 'hr', label: 'Hour (0-23)', type: 'number', v: String(sc ? sc.hour : 20) }], async v => {
@@ -85,13 +89,18 @@ export async function mount(root) {
     await mount(root);
   });
   const test = async () => { try { const r = await api('/functions/v1/report', { method: 'POST', body: '{}' }); toast(r.ok && (await r.text()) === 'sent' ? 'Test email sent.' : 'Report email could not be sent.'); } catch (e) { toast(e.message); } await mount(root); };
+  const used = navigator.storage && navigator.storage.estimate ? (await navigator.storage.estimate()).usage || 0 : 0;
+  const mb = n => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.ceil(n / 1024) + ' KB');
+  const go = h('button', { class: 'btn', type: 'button', onclick: () => pass('Back up to cloud', async p => { await backup(p); toast('Cloud backup saved.'); }) }, 'Back up now');
   root.replaceChildren(
-    card(h('b', {}, 'Cloud backup'), problem ? h('p', { class: 'err' }, problem) : null, h('p', { class: 'muted' }, (email || 'Signed in') + (due ? ' · Backup due' : ' · Last backup ' + new Date(last).toLocaleString())),
-      h('p', { class: 'muted' }, 'If you lose your passphrase, nobody can recover your cloud backups. Write it down.'),
-      h('button', { class: 'btn', type: 'button', onclick: () => pass('Back up to cloud', async p => { await backup(p); toast('Cloud backup saved.'); }) }, 'Back up now'),
-      h('button', { class: 'btn sec', type: 'button', onclick: schedule }, sc ? 'Schedule: ' + ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][sc.weekday] + ' ' + sc.hour + ':00' : 'Set schedule'), h('button', { class: 'btn sec', type: 'button', onclick: async () => { await set('cloud_session', null); await mount(root); } }, 'Sign out')),
-    card(h('b', {}, 'Restore'), ...(list.length ? list.map(b => h('div', { class: 'ln' }, h('span', {}, new Date(b.created_at).toLocaleString() + ' · ' + Math.ceil(b.size / 1024) + ' KB'), h('button', { class: 'btn sec', type: 'button', onclick: () => pass('Restore backup', p => fromCloud(b.id, p)) }, 'Restore'))) : [h('p', { class: 'muted' }, 'No cloud backups yet.')])),
-    card(h('b', {}, 'Report emails'), h('p', { class: 'muted' }, (rset.recipients || []).length ? (rset.recipients || []).join(', ') + ' · ' + ['weekly', 'monthly', 'yearly'].filter(k => rset[k]).join(', ') : 'Not set up.'),
+    card(h('b', {}, 'Cloud backup'), problem ? h('p', { class: 'err' }, problem) : null, h('p', { class: 'muted' }, due ? 'Backup due' : 'Last backup ' + new Date(last).toLocaleString()), go,
+      h('p', { class: 'muted' }, 'On this device: ' + mb(used) + ' · In your cloud: ' + mb(server))),
+    card(h('b', {}, 'Backup history'), ...(list.length ? list.map(b => h('div', { class: 'ln' }, h('span', {}, new Date(b.created_at).toLocaleString()), h('span', { class: 'muted' }, mb(b.size)))) : [h('p', { class: 'muted' }, 'No cloud backups yet.')])),
+    h('details', { class: 'card' }, h('summary', {}, 'Options'), h('p', { class: 'muted' }, 'If you lose your passphrase, nobody can recover your cloud backups.'),
+      ...list.map(b => h('div', { class: 'ln' }, h('span', {}, new Date(b.created_at).toLocaleDateString()), h('button', { class: 'btn sec', type: 'button', onclick: () => pass('Restore backup', p => fromCloud(b.id, p)) }, 'Restore'))),
+      h('button', { class: 'btn sec', type: 'button', onclick: schedule }, sc ? 'Schedule: ' + ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][sc.weekday] + ' ' + sc.hour + ':00' : 'Set schedule'),
+      h('button', { class: 'btn sec', type: 'button', onclick: async () => { await set('cloud_session', null); await mount(root); } }, 'Sign out'),
+      h('p', {}, h('b', {}, 'Report emails')), h('p', { class: 'muted' }, (rset.recipients || []).length ? (rset.recipients || []).join(', ') + ' · ' + ['weekly', 'monthly', 'yearly'].filter(k => rset[k]).join(', ') : 'Not set up.'),
       h('button', { class: 'btn', type: 'button', onclick: saveRep }, 'Edit'), h('button', { class: 'btn sec', type: 'button', onclick: test }, 'Send test'),
       ...logs.map(l => h('div', { class: 'ln' }, h('span', {}, l.created_at.slice(0, 10) + ' ' + l.period), h('span', {}, l.status === 'sent' ? 'Sent' : 'Report email could not be sent.')))));
 }
@@ -103,4 +112,11 @@ export async function dueCheck() {
   const d = new Date(); d.setHours(sc.hour, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() - sc.weekday + 7) % 7));
   if (d > new Date()) d.setDate(d.getDate() - 7);
   return !last || last < d.getTime();
+}
+
+// Staff names and permissions go to a readable table (never PIN hashes).
+async function staffSync() {
+  const cs = await all('cashiers'); if (!cs.length) return;
+  const r = await api('/rest/v1/staff?on_conflict=id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(cs.map(c => ({ id: c.id, name: c.name, role: c.role, can_discount: c.can_discount, can_refund: c.can_refund, can_see_profit: c.can_see_profit, active: c.active, updated_at: new Date().toISOString() }))) });
+  if (!r.ok) throw new Error('Backup failed. Trying again.');
 }
