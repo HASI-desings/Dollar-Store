@@ -1,11 +1,12 @@
-import { h, toast, download } from './ui.js';
+import { h, toast, download, confirmBox, progress } from './ui.js';
+import { requirePin } from './staff.js';
 import { STORES, tx, all, req, uid } from './db.js';
 import { okRow } from './schema.js';
 const DATA = STORES.filter(s => s !== 'backups_log');
 const hex = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 export async function snapshot() {
-  const data = await tx(DATA, 'readonly', async st => { const o = {}; for (const n of DATA) o[n] = (await req(st[n].getAll())).filter(r => !(n === 'settings' && ['cloud_session', 'pin_lock'].includes(r.key))); return o; });  // login tokens never go into a backup file
+  const data = await tx(DATA, 'readonly', async st => { const o = {}; for (const n of DATA) o[n] = (await req(st[n].getAll())).filter(r => !(n === 'settings' && ['cloud_session', 'pin_lock', 'session'].includes(r.key))); return o; });  // login tokens never go into a backup file
   return { version: 1, created_at: new Date().toISOString(), data, checksum: await hex(JSON.stringify(data)) };
 }
 // Untrusted file: size, JSON, version, known stores only, arrays of objects, checksum.
@@ -34,25 +35,30 @@ export async function mount(el) {
   if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
   const kept = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : true;
   const last = (await all('backups_log')).filter(b => b.status === 'ok').sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  const pb = progress(); pb.el.classList.add('hidden');
   const now = async () => {
+    if (go.classList.contains('loading')) return;
+    go.classList.add('loading'); pb.el.classList.remove('hidden'); pb.set(15);
     try {
-      const s = await snapshot(), text = JSON.stringify(s);
+      const s = await snapshot(), text = JSON.stringify(s); pb.set(60);
       download('dollar-store-backup-' + s.created_at.slice(0, 10) + '.json', text, 'application/json');
       await tx(['backups_log'], 'readwrite', st => { st.backups_log.add({ id: uid(), created_at: s.created_at, kind: 'file', size: text.length, status: 'ok', checksum: s.checksum }); });
-      toast('Backup saved.'); await mount(el);
-    } catch (e) { toast('Backup failed. Try again.'); }
+      pb.set(100); toast('Backup saved.'); await mount(el);
+    } catch (e) { toast('Backup failed. Try again.'); go.classList.remove('loading'); pb.el.classList.add('hidden'); }
   };
-  const picker = h('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Backup file', onchange: async () => {
+  const picker = h('input', { class: 'file', type: 'file', accept: '.json,application/json', 'aria-label': 'Backup file', onchange: async () => {
     const file = picker.files[0]; if (!file) return;
     let f; try { f = await validate(file); } catch (e) { toast('This backup file is damaged.'); return; }
-    if (!confirm('Replace ALL current data with this backup?')) return;
+    if (!(await confirmBox('Replace ALL current data with this backup?', 'Replace'))) return;
+    if (!(await requirePin('Restore backup'))) return;
     try { await restore(f); toast('Backup restored.'); setTimeout(() => { location.hash = '#/sell'; location.reload(); }, 800); }
     catch (e) { toast('Restore failed. Your data is unchanged.'); }
   } });
+  const go = h('button', { class: 'btn', type: 'button', onclick: now }, 'Backup now');
   el.replaceChildren(h('section', { class: 'card' }, h('b', {}, 'Backup and restore'),
     h('p', { class: 'muted' }, last ? 'Last backup: ' + new Date(last.created_at).toLocaleString() + ' (' + Math.ceil(last.size / 1024) + ' KB)' : 'No backup yet.'),
     kept ? null : h('p', { class: 'err' }, 'Your browser may clear data. Back up often.'),
-    h('button', { class: 'btn', type: 'button', onclick: now }, 'Backup now'), h('p', { class: 'muted' }, 'Restore from file'), picker));
+    go, pb.el, h('p', { class: 'muted' }, 'Restore from file'), h('label', { class: 'btn sec filebtn' }, 'Choose backup file', picker)));
 }
 
 // True when the last good file backup is over 7 days old and there are sales to protect.
