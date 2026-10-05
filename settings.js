@@ -1,4 +1,5 @@
 import { h, ask, toast } from './ui.js';
+import { requirePin } from './staff.js';
 import { put, tx, req, open } from './db.js';
 import { setLang, lang } from './i18n.js';
 import * as license from './license.js';
@@ -22,6 +23,7 @@ export async function mount(root) {
       h('p', { class: 'muted' }, 'Android: Chrome menu, Install app. Windows or Linux: install icon in the address bar. iPhone: Safari, Share, Add to Home Screen. Printing: use Print on the receipt (80 mm or 58 mm). iPhone has no Bluetooth printing from a web app: use AirPrint, Save PDF or WhatsApp.')),
     h('section', { class: 'card' }, h('button', { class: 'btn sec', type: 'button', onclick: () => ask('Erase all local data', [{ k: 'n', label: 'Type the shop name to confirm' }], async v => {
       if (v.n !== shop.name) return 'The name does not match.';
+      if (!(await requirePin('Erase data'))) return 'Cancelled.';
       (await open()).close();
       await new Promise((res, rej) => { const r = indexedDB.deleteDatabase('dsb'); r.onsuccess = res; r.onblocked = res; r.onerror = () => rej(r.error); });
       location.reload();
