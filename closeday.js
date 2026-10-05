@@ -1,4 +1,5 @@
-import { h, toast } from './ui.js';
+import { h, toast, confirmBox } from './ui.js';
+import { requirePin } from './staff.js';
 import { all, put, uid } from './db.js';
 import { rs, dayKey, expectedCash } from './money.js';
 
@@ -17,7 +18,8 @@ export async function mount(root) {
   const close = async () => {
     const n = Number(input.value);
     if (input.value === '' || !Number.isInteger(n) || n < 0) { result.textContent = 'Enter the counted cash.'; return; }
-    if (!confirm('Close the day? It cannot be changed after.')) return;
+    if (!(await confirmBox('Close the day? It cannot be changed after.', 'Close day'))) return;
+    if (!(await requirePin('Close the day'))) return;
     await put('day_closes', { id: uid(), date: dayKey(new Date()), expected_cash: exp, counted_cash: n, difference: n - exp, closed_at: new Date().toISOString() });
     toast('Day closed.'); await mount(root);
   };
