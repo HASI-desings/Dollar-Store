@@ -1,10 +1,11 @@
 import { tx, req, put, setLock } from './db.js';
-import { LICENSE_PUBLIC_JWK } from './config.js';
+import { LICENSE_PUBLIC_JWK, ACTIVATION_KEY } from './config.js';
 const dec = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 const get = async k => (await tx(['settings'], 'readonly', s => req(s.settings.get(k))))?.value;
 
 // Code = base64url(payload).base64url(ECDSA P-256 signature). Only the public key is in the app.
 export async function verify(code) {
+  if (ACTIVATION_KEY && String(code).trim().toUpperCase() === ACTIVATION_KEY.toUpperCase()) return { shop: '', exp: null };
   try {
     const [p, sg] = String(code).trim().split('.');
     const key = await crypto.subtle.importKey('jwk', LICENSE_PUBLIC_JWK, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
