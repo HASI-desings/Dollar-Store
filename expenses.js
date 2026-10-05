@@ -1,4 +1,5 @@
 import { h, ask } from './ui.js';
+import { requirePin, notify } from './staff.js';
 import { all, put, uid, tx, req, locked } from './db.js';
 import { rs, posInt, dayKey } from './money.js';
 const CATS = ['rent', 'electricity', 'staff', 'transport', 'personal', 'other'];
@@ -23,10 +24,11 @@ export async function mount(root) {
     const a = posInt(v.amount), c = v.category.toLowerCase();
     if (!v.label) return 'Enter a name.'; if (!a) return 'Enter an amount.'; if (!CATS.includes(c)) return 'Pick a listed category.';
     if (await closed()) return 'This day is closed.';
-    await put('expenses', { id: uid(), label: v.label, amount: a, category: c, date: new Date().toISOString(), recurring_id: null }); await mount(root);
+    await put('expenses', { id: uid(), label: v.label, amount: a, category: c, date: new Date().toISOString(), recurring_id: null }); await notify('expense ' + v.label); await mount(root);
   });
   const addWd = () => ask('Owner withdrawal', [{ k: 'amount', label: 'Amount (Rs)', type: 'number' }, { k: 'note', label: 'Note' }], async v => {
     const a = posInt(v.amount); if (!a) return 'Enter an amount.'; if (await closed()) return 'This day is closed.';
+    if (!(await requirePin('Withdrawal'))) return 'Cancelled.';
     await put('withdrawals', { id: uid(), amount: a, note: v.note, created_at: new Date().toISOString() }); await mount(root);
   });
   const addRec = () => ask('Recurring expense', [{ k: 'label', label: 'What for (rent, electricity...)' }, { k: 'amount', label: 'Amount (Rs)', type: 'number' }, { k: 'category', label: 'Category: ' + CATS.join(', '), v: 'rent' }, { k: 'day', label: 'Day of month (1-28)', type: 'number', v: '1' }], async v => {
