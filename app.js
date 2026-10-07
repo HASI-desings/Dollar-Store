@@ -12,20 +12,21 @@ import * as insights from './insights.js';
 import * as goals from './goals.js';
 import * as staff from './staff.js';
 import * as settings from './settings.js';
-import * as sync from './sync.js';
 import * as setup from './setup.js';
 import * as license from './license.js';
 import * as i18n from './i18n.js';
 import * as moneyhub from './moneyhub.js';
 import * as shop from './shop.js';
 const t = i18n.t;
+// Safari ignores user-scalable=no, so block its pinch gesture too.
+document.addEventListener('gesturestart', e => e.preventDefault());
 
 const empty = line => body => body.replaceChildren(h('section', { class: 'card empty' }, h('h2', {}, 'Coming soon'), h('p', { class: 'muted' }, line)));
 const PAGES = [
   { id: 'sell', title: 'Sell', skel: 'grid', mount: sell.mount }, { id: 'receipts', title: 'Receipts', mount: receipts.mount },
   { id: 'money', title: 'Money', mount: moneyhub.mount }, { id: 'shop', title: 'Shop', mount: shop.mount }];
 const guard = f => async b => { if (await staff.guardOwner()) return f(b); empty('Owner only.')(b); };
-const SUBS = [{ id: 'staff', title: 'Staff and roles', tab: 3, mount: guard(staff.mount) }, { id: 'settings', title: 'Settings', tab: 3, mount: guard(settings.mount) }, { id: 'cloud', title: 'Cloud backup', tab: 3, mount: guard(sync.mount) }];
+const SUBS = [{ id: 'staff', title: 'Staff and roles', tab: 3, mount: guard(staff.mount) }, { id: 'settings', title: 'Settings', tab: 3, mount: guard(settings.mount) }];
 const view = document.getElementById('view'), tabs = document.getElementById('tabs'), barTitle = document.getElementById('barTitle');
 let current = -1;
 
@@ -66,7 +67,6 @@ addEventListener('online', updateChip); addEventListener('offline', updateChip);
 async function checkDue() {
   try {
     if (await backup.dueCheck()) banner('Backup due. Save a backup file.', [{ label: 'Open', run: () => { location.hash = '#/shop'; } }]);
-    if (await sync.dueCheck()) banner('Cloud backup is due.', [{ label: 'Open', run: () => { location.hash = '#/cloud'; } }]);
     if ((await shop.usage()) > 524288000) banner('Local data is over 500 MB. Back up now for safety.', [{ label: 'Open', run: () => { location.hash = '#/shop'; } }]);
     const n = await staff.unseen();
     if (n) banner(n + ' staff action' + (n > 1 ? 's' : '') + ' since your last visit.', [{ label: 'View', run: () => { location.hash = '#/staff'; } }]);
