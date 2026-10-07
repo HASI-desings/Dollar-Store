@@ -21,6 +21,6 @@ export async function mount(root) {
   const bar = progress(); bar.set(Math.min(used / LIMIT, 1) * 100); bar.el.classList.toggle('bad', used / LIMIT > 0.8);
   root.replaceChildren(
     h('section', { class: 'card' }, h('b', {}, shop.name), h('p', { class: 'muted' }, [shop.address, shop.phone].filter(Boolean).join(' · ') || 'No address or phone yet.'), h('button', { class: 'btn sec', type: 'button', onclick: edit }, 'Edit shop details')),
-    h('section', { class: 'card' }, h('button', { class: 'lnk btnlink', type: 'button', onclick: toggle }, 'Backup and restore', h('span', {}, '›')), panel, link('staff', 'Staff and roles'), link('settings', 'Settings'), link('cloud', 'Cloud backup')),
+    h('section', { class: 'card' }, h('button', { class: 'lnk btnlink', type: 'button', onclick: toggle }, 'Backup and restore', h('span', {}, '›')), panel, link('staff', 'Staff and roles'), link('settings', 'Settings')),
     h('section', { class: 'card' }, h('b', {}, 'Storage on this device'), h('p', { class: 'muted' }, fmt(used) + ' of 500 MB'), bar.el, used > LIMIT ? h('p', { class: 'err' }, 'Local data is over 500 MB. Back up now for safety.') : null));
 }
