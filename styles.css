@@ -112,3 +112,8 @@ h1,h2{color:var(--ink)}.card,.stat-tile{box-shadow:0 1px 3px rgba(20,33,61,.05)}
 .btnlink{width:100%;background:none;border:0;border-bottom:1px solid var(--line);font:inherit;cursor:pointer;text-align:left}
 .file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}.filebtn{position:relative;display:inline-flex;align-items:center;cursor:pointer}.filebtn:focus-within{outline:2px solid var(--ink);outline-offset:2px}
 details.card summary{min-height:48px;display:flex;align-items:center;cursor:pointer;font-weight:600}
+
+/* No double-tap or pinch zoom; money tiles can be tapped */
+html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.stat-tile.tap{text-align:left;font:inherit;color:inherit;cursor:pointer;transition:transform 160ms var(--curve)}.stat-tile.tap:active{transform:scale(.97)}
