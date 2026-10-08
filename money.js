@@ -1,7 +1,7 @@
 // Pure integer-rupee money functions.
 export const rs = n => 'Rs ' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 export const subtotal = lines => lines.reduce((a, l) => a + l.unit_price * l.qty, 0);
-export const receiptNo = n => 'R-' + String(n).padStart(4, '0');
+export const receiptNo = (n, p = 'R') => p + '-' + String(n).padStart(4, '0');
 // Pro-rata refund, rounded half up with integers only.
 export const refundAmount = (sum, total, sub) => (sub ? Math.floor((2 * sum * total + sub) / (2 * sub)) : 0);
 // Pakistan numbers: 03xxxxxxxxx or 923xxxxxxxxx -> 923xxxxxxxxx, else null.
