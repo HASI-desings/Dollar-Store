@@ -117,3 +117,4 @@ details.card summary{min-height:48px;display:flex;align-items:center;cursor:poin
 html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
 .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .stat-tile.tap{text-align:left;font:inherit;color:inherit;cursor:pointer;transition:transform 160ms var(--curve)}.stat-tile.tap:active{transform:scale(.97)}
+.linkbox{word-break:break-all;background:var(--surface-2);border-radius:12px;padding:12px;font-size:14px;user-select:all}
