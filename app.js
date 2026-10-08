@@ -14,6 +14,7 @@ import * as staff from './staff.js';
 import * as settings from './settings.js';
 import * as setup from './setup.js';
 import * as license from './license.js';
+import * as cloud from './cloud.js';
 import * as i18n from './i18n.js';
 import * as moneyhub from './moneyhub.js';
 import * as shop from './shop.js';
@@ -100,10 +101,14 @@ addEventListener('unhandledrejection', e => (e.reason && e.reason.message === 'l
 (async () => {
   try {
     await i18n.load(); i18n.watch();
+    const jm = location.hash.match(/^#\/join\/([0-9a-f]{32})$/);
+    if (jm && await setup.needed()) await setup.join(jm[1]);
+    else if (jm) { toast('This device is already set up.'); location.hash = '#/sell'; }
     if (await setup.needed()) await setup.run();
     const st = await license.apply();
-    if (st.mode === 'expired') toast('Trial ended. Enter an activation code.');
+    if (!['trial', 'subscription', 'permanent'].includes(st.mode)) toast('Your plan is not active. Enter an activation key in Settings.');
     await staff.init();
+    cloud.pushSoon(); setInterval(() => license.apply().catch(() => null), 1800000);
   } catch (e) { errorSheet(e.message === 'nodb' ? 'This browser is blocking storage.' : String(e.message)); }
   route();
   checkDue();
