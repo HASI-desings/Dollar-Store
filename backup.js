@@ -3,10 +3,12 @@ import { requirePin } from './staff.js';
 import { STORES, tx, all, req, uid } from './db.js';
 import { okRow } from './schema.js';
 const DATA = STORES.filter(s => s !== 'backups_log');
+// This device's own login and plan are never put in a backup file and never replaced by a restore.
+const KEEP = ['cloud_session', 'pin_lock', 'session', 'device', 'license_state', 'receipt_prefix', 'last_seen'];
 const hex = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 export async function snapshot() {
-  const data = await tx(DATA, 'readonly', async st => { const o = {}; for (const n of DATA) o[n] = (await req(st[n].getAll())).filter(r => !(n === 'settings' && ['cloud_session', 'pin_lock', 'session'].includes(r.key))); return o; });  // login tokens never go into a backup file
+  const data = await tx(DATA, 'readonly', async st => { const o = {}; for (const n of DATA) o[n] = (await req(st[n].getAll())).filter(r => !(n === 'settings' && KEEP.includes(r.key))); return o; });  // login tokens never go into a backup file
   return { version: 1, created_at: new Date().toISOString(), data, checksum: await hex(JSON.stringify(data)) };
 }
 // Untrusted file: size, JSON, version, known stores only, arrays of objects, checksum.
@@ -23,9 +25,11 @@ export async function check(f) {
 // All or nothing: a safety snapshot is saved, stores are replaced, the receipt counter is reset, in ONE transaction.
 export async function restore(f) {
   const snap = await snapshot();
-  await tx(STORES, 'readwrite', st => {
+  await tx(STORES, 'readwrite', async st => {
+    const keep = (await req(st.settings.getAll())).filter(r => KEEP.includes(r.key));
     st.backups_log.add({ id: uid(), created_at: new Date().toISOString(), kind: 'file', size: 0, status: 'pre-restore', checksum: snap.checksum, payload: JSON.stringify(snap) });
     for (const n of DATA) { st[n].clear(); (f.data[n] || []).forEach(r => st[n].put(r)); }
+    keep.forEach(r => st.settings.put(r));
     const mx = (f.data.sales || []).reduce((a, s) => Math.max(a, parseInt(String(s.receipt_no).slice(2), 10) || 0), 0);
     st.settings.put({ key: 'receipt_counter', value: mx });
   });
