@@ -3,6 +3,7 @@ import { all, put, tx, req, uid } from './db.js';
 import { rs, subtotal, receiptNo, waNumber } from './money.js';
 import { t } from './i18n.js';
 import { current, notify } from './staff.js';
+import { pushSoon } from './cloud.js';
 
 const STARTER = ['Glass', 'Candle', 'Comb', 'Kitchen', 'Lamp', 'Toys', 'Other'];
 const METHODS = [['cash', 'Cash'], ['easypaisa', 'Easypaisa'], ['jazzcash', 'JazzCash'], ['credit', 'Credit']];
@@ -114,7 +115,7 @@ async function make(err, close) {
   if (bill.method === 'cash' && (bill.cash === '' || !Number.isInteger(c) || c < tot)) { err.textContent = 'Short by ' + rs(tot - (c || 0)) + '.'; return; }
   if (bill.method === 'credit' && !waNumber(bill.phone)) { err.textContent = 'Enter a valid phone number.'; return; }
   saving = true; err.textContent = '';
-  try { const r = await saveSale(bill); bill = fresh(); close(); draw(); if (r.clock) toast('Your phone clock looks wrong. Check the date.'); notify('sale ' + r.sale.receipt_no).catch(() => toast('Could not alert the owner.')); showReceipt(r.sale, r.lines); }
+  try { const r = await saveSale(bill); bill = fresh(); close(); draw(); if (r.clock) toast('Your phone clock looks wrong. Check the date.'); pushSoon(); notify('sale ' + r.sale.receipt_no).catch(() => toast('Could not alert the owner.')); showReceipt(r.sale, r.lines); }
   catch (e) { err.textContent = e.message === 'locked' ? 'Trial ended. Enter an activation code.' : 'Could not save. Nothing was charged. Try again.'; }
   finally { saving = false; }
 }
@@ -124,9 +125,9 @@ function saveSale(b) {
   const lines = b.cart, sub = subtotal(lines), total = sub - b.discount, cu = current();
   return tx(['sales', 'sale_lines', 'settings', 'held_bills', 'activity_log'], 'readwrite', async s => {
     const ex = await req(s.sales.get(b.id)); if (ex) return { sale: ex, lines };
-    const c = await req(s.settings.get('receipt_counter')), n = (c ? c.value : 0) + 1;
+    const c = await req(s.settings.get('receipt_counter')), n = (c ? c.value : 0) + 1, px = await req(s.settings.get('receipt_prefix'));
     const ls = await req(s.settings.get('last_sale_at')), nowIso = new Date().toISOString(), clock = !!(ls && nowIso < ls.value);
-    const sale = { id: b.id, receipt_no: receiptNo(n), created_at: new Date().toISOString(), cashier_id: cu.id, cashier_name: cu.name, customer_name: b.name, customer_phone: b.phone, subtotal: sub, discount: b.discount, total, method: b.method, cash_received: b.method === 'cash' ? Number(b.cash) : 0, status: 'completed' };
+    const sale = { id: b.id, receipt_no: receiptNo(n, px ? px.value : 'R'), created_at: new Date().toISOString(), cashier_id: cu.id, cashier_name: cu.name, customer_name: b.name, customer_phone: b.phone, subtotal: sub, discount: b.discount, total, method: b.method, cash_received: b.method === 'cash' ? Number(b.cash) : 0, status: 'completed' };
     s.sales.add(sale);
     lines.forEach(l => s.sale_lines.add({ id: uid(), sale_id: b.id, category_name: l.category_name, label: l.label, unit_price: l.unit_price, qty: l.qty, refunded_qty: 0 }));
     s.settings.put({ key: 'receipt_counter', value: n }); s.held_bills.delete('draft');
