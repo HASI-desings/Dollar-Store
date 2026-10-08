@@ -1,31 +1,35 @@
 import { tx, req, put, setLock } from './db.js';
-import { LICENSE_PUBLIC_JWK, ACTIVATION_KEY } from './config.js';
-const dec = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+import * as cloud from './cloud.js';
 const get = async k => (await tx(['settings'], 'readonly', s => req(s.settings.get(k))))?.value;
+const DAY = 864e5;
 
-// Code = base64url(payload).base64url(ECDSA P-256 signature). Only the public key is in the app.
-export async function verify(code) {
-  if (ACTIVATION_KEY && String(code).trim().toUpperCase() === ACTIVATION_KEY.toUpperCase()) return { shop: '', exp: null };
-  try {
-    const [p, sg] = String(code).trim().split('.');
-    const key = await crypto.subtle.importKey('jwk', LICENSE_PUBLIC_JWK, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
-    if (!(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, dec(sg), new TextEncoder().encode(p)))) return null;
-    return JSON.parse(new TextDecoder().decode(dec(p)));
-  } catch (e) { return null; }
+// Asks the server for this shop's plan and keeps a copy for offline use.
+export async function refresh() {
+  try { const info = await cloud.shopState(); await put('settings', { key: 'license_state', value: cloud.stateFrom(info) }); return info; }
+  catch (e) {
+    if (e.message === 'This device is not registered.') await put('settings', { key: 'license_state', value: { state: 'blocked', plan: 'blocked', checked_at: Date.now() } });
+    throw e;
+  }
 }
-// "Now" never goes backwards, so moving the phone clock back does not extend the trial.
+// Offline, the saved plan is trusted for 7 days (30 for permanent), and time never runs backwards.
 export async function status() {
   const now = Math.max(Date.now(), (await get('last_seen')) || 0);
   await put('settings', { key: 'last_seen', value: now });
-  const lic = await get('license');
-  if (lic) { const d = await verify(lic); if (d && (!d.exp || Date.parse(d.exp) > now)) return { mode: 'licensed' }; }
-  let t0 = await get('trial_start');
-  if (!t0) { t0 = now; await put('settings', { key: 'trial_start', value: t0 }); }
-  const left = 7 - Math.floor((now - t0) / 864e5);
-  return left > 0 ? { mode: 'trial', left } : { mode: 'expired' };
+  const s = await get('license_state');
+  if (!s) return { mode: 'none' };
+  if (['blocked', 'trial_ended', 'subscription_expired'].includes(s.state)) return { mode: 'expired', why: s.state };
+  if (now - s.checked_at > (s.plan === 'permanent' ? 30 : 7) * DAY) return { mode: 'offline_expired' };
+  if (s.valid_until && Date.parse(s.valid_until) <= now) return { mode: 'expired', why: s.state };
+  return { mode: s.plan, left: s.valid_until ? Math.max(0, Math.ceil((Date.parse(s.valid_until) - now) / DAY)) : null, until: s.valid_until };
 }
-export async function apply() { const s = await status(); setLock(s.mode === 'expired'); return s; }
-export async function activate(code) {
-  if (!(await verify(code))) return false;
-  await put('settings', { key: 'license', value: String(code).trim() }); await apply(); return true;
+export async function apply() {
+  await refresh().catch(() => null);  // offline is fine: the saved plan is used
+  const s = await status();
+  setLock(!['trial', 'subscription', 'permanent'].includes(s.mode));
+  return s;
+}
+export async function activate(key, devices) {
+  const info = await cloud.activateKey(key, devices);
+  await put('settings', { key: 'license_state', value: cloud.stateFrom(info) });
+  await apply(); return info;
 }
