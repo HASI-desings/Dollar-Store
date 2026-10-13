@@ -15,6 +15,7 @@ import * as settings from './settings.js';
 import * as setup from './setup.js';
 import * as license from './license.js';
 import * as cloud from './cloud.js';
+import * as paywall from './paywall.js';
 import * as i18n from './i18n.js';
 import * as moneyhub from './moneyhub.js';
 import * as shop from './shop.js';
@@ -65,6 +66,13 @@ const updateChip = () => { const c = document.getElementById('chip'); if (c) c.c
 addEventListener('online', updateChip); addEventListener('offline', updateChip);
 
 // A new service worker waits until the app is fully closed, so an open bill is never interrupted.
+// When the plan is not active the whole app is blocked until it is paid.
+function gate(st) { if (!['trial', 'subscription', 'permanent'].includes(st.mode)) paywall.show(st.mode === 'expired' ? st.why : 'offline_expired'); }
+// Asks the browser not to delete this app's data when it needs space.
+async function ensurePersist() {
+  if (!navigator.storage || !navigator.storage.persist || (await navigator.storage.persisted())) return;
+  if (!(await navigator.storage.persist())) banner('Your browser may delete this app\'s data when space is low. Install the app and back up often.', [{ label: 'Open Shop', run: () => { location.hash = '#/shop'; } }]);
+}
 async function checkDue() {
   try {
     if (await backup.dueCheck()) banner('Backup due. Save a backup file.', [{ label: 'Open', run: () => { location.hash = '#/shop'; } }]);
@@ -104,11 +112,13 @@ addEventListener('unhandledrejection', e => (e.reason && e.reason.message === 'l
     const jm = location.hash.match(/^#\/join\/([0-9a-f]{32})$/);
     if (jm && await setup.needed()) await setup.join(jm[1]);
     else if (jm) { toast('This device is already set up.'); location.hash = '#/sell'; }
-    if (await setup.needed()) await setup.run();
+    const need = await setup.needed();
+    if (need) await setup.run(need);
     const st = await license.apply();
-    if (!['trial', 'subscription', 'permanent'].includes(st.mode)) toast('Your plan is not active. Enter an activation key in Settings.');
+    gate(st);
     await staff.init();
-    cloud.pushSoon(); setInterval(() => license.apply().catch(() => null), 1800000);
+    cloud.pushSoon(); setInterval(() => license.apply().then(gate).catch(() => null), 1800000);
+    ensurePersist().catch(() => toast('Could not check storage.'));
   } catch (e) { errorSheet(e.message === 'nodb' ? 'This browser is blocking storage.' : String(e.message)); }
   route();
   checkDue();
