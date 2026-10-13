@@ -7,9 +7,10 @@ export const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.re
 export function open() {
   if (!dbp) dbp = new Promise((res, rej) => {
     if (!window.indexedDB) return rej(new Error('nodb'));
-    const r = indexedDB.open('dsb', 1);
-    r.onupgradeneeded = () => { for (const s of STORES) { const o = r.result.createObjectStore(s, { keyPath: KEYS[s] || 'id' }); if (s === 'sale_lines') o.createIndex('sale_id', 'sale_id'); } };
-    r.onsuccess = () => res(r.result);
+    const r = indexedDB.open('dsb', 2);
+    // Upgrades only ever ADD missing stores. Existing data is never touched.
+    r.onupgradeneeded = () => { for (const s of STORES) { if (r.result.objectStoreNames.contains(s)) continue; const o = r.result.createObjectStore(s, { keyPath: KEYS[s] || 'id' }); if (s === 'sale_lines') o.createIndex('sale_id', 'sale_id'); } };
+    r.onsuccess = () => { r.result.onversionchange = () => r.result.close(); res(r.result); };
     r.onerror = () => rej(new Error('nodb'));
   });
   return dbp;
