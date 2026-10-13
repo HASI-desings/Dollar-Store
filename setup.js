@@ -1,10 +1,11 @@
-import { h } from './ui.js';
+import { h, toast } from './ui.js';
 import { put, tx, req, uid } from './db.js';
 import { setLang } from './i18n.js';
 import * as cloud from './cloud.js';
 import { waNumber } from './money.js';
 const STARTER = ['Glass', 'Candle', 'Comb', 'Kitchen', 'Lamp', 'Toys', 'Other'];
-export const needed = async () => { const g = k => tx(['settings'], 'readonly', s => req(s.settings.get(k))); return !(await g('setup_done')) || !(await g('license_state')); };
+// 'full' = first run. 'register' = shop details already saved (older install): only register it, nothing is asked again.
+export const needed = async () => { const g = k => tx(['settings'], 'readonly', s => req(s.settings.get(k))); if (!(await g('setup_done'))) return 'full'; return (await g('license_state')) ? null : 'register'; };
 // Opened from a device link: adds this device to the shop that shared it.
 export function join(token) {
   return new Promise(done => {
@@ -12,18 +13,19 @@ export function join(token) {
     const box = h('div', { class: 'setup' }, h('h1', {}, 'Join a shop'), h('p', { class: 'muted' }, 'This device will be added to the shop that shared this link. Needs internet.'), err, btn);
     btn.addEventListener('click', async () => {
       btn.classList.add('loading'); err.textContent = '';
-      try { await cloud.join(token); location.hash = '#/sell'; box.remove(); done(); } catch (e) { err.textContent = e.message; } finally { btn.classList.remove('loading'); }
+      try { await cloud.join(token); await cloud.pull().catch(() => toast('Could not copy the shop data yet. Use Settings, Restore from cloud.')); location.hash = '#/sell'; box.remove(); done(); } catch (e) { err.textContent = e.message; } finally { btn.classList.remove('loading'); }
     });
     document.body.append(box);
   });
 }
 
 // First-run flow: language, shop, activation or trial, starter categories.
-export function run() {
+export async function run(mode = 'full') {
+  const shop = mode === 'register' ? (await tx(['settings'], 'readonly', s => req(s.settings.get('shop'))))?.value || {} : {};
   return new Promise(done => {
-    const st = { name: '', address: '', phone: '', cashier: 'Owner', cats: new Set(STARTER) }, inputs = {}, err = h('p', { class: 'err' });
+    const st = { name: shop.name || '', address: shop.address || '', phone: shop.phone || '', cashier: 'Owner', cats: new Set(STARTER) }, inputs = {}, err = h('p', { class: 'err' });
     const box = h('div', { class: 'setup' }); document.body.append(box);
-    let step = 0;
+    let step = mode === 'register' ? (st.name && waNumber(st.phone) ? 2 : 1) : 0;
     const field = (k, label) => h('label', { class: 'fld' }, label, inputs[k] = h('input', { type: 'text', value: st[k] }));
     const next = () => { step++; paint(); };
     const finish = async () => {
@@ -46,7 +48,9 @@ export function run() {
         const trial = h('button', { class: 'btn full', type: 'button' }, 'Start 7-day free trial'), act = h('button', { class: 'btn sec opt', type: 'button' }, 'Activate with key');
         const go = async (btn, key) => {
           if (btn.classList.contains('loading')) return; btn.classList.add('loading'); err.textContent = '';
-          try { await cloud.registerShop(st.name, st.phone, key, key ? Number(dev.value) : null); next(); } catch (e) { err.textContent = e.message; } finally { btn.classList.remove('loading'); }
+          try { await cloud.registerShop(st.name, st.phone, key, key ? Number(dev.value) : null);
+            if (mode === 'register') { await put('settings', { key: 'shop', value: { name: st.name, address: st.address, phone: st.phone } }); box.remove(); done(); } else next();
+          } catch (e) { err.textContent = e.message; } finally { btn.classList.remove('loading'); }
         };
         trial.addEventListener('click', () => go(trial, null));
         act.addEventListener('click', () => { if (!code.value.trim()) { err.textContent = 'Enter your activation key.'; return; } go(act, code.value.trim()); });
