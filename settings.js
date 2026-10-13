@@ -6,6 +6,7 @@ import * as license from './license.js';
 import * as cloud from './cloud.js';
 import { readPrices, planImport } from './csv.js';
 import { SUPPORT_WHATSAPP } from './config.js';
+import { LEASE_PUBLIC_JWK } from './lease-key.js';
 const get = async k => (await tx(['settings'], 'readonly', s => req(s.settings.get(k))))?.value;
 const day = d => new Date(d).toLocaleDateString();
 const key = s => String(s).trim().toLowerCase();
@@ -22,7 +23,7 @@ export async function mount(root) {
   const row = (a, b) => h('div', { class: 'rw' }, h('span', {}, a), h('span', {}, b));
 
   // ----- plan, activation, devices
-  const planTxt = st.mode === 'trial' ? 'Free trial: ' + st.left + ' day(s) left' : st.mode === 'subscription' ? 'Subscription active until ' + day(st.until) : st.mode === 'permanent' ? 'Permanent license'
+  const planTxt = st.mode === 'trial' ? 'Free trial: ' + st.left + (st.left === 1 ? ' day' : ' days') + ' left' : st.mode === 'subscription' ? 'Subscription active until ' + day(st.until) : st.mode === 'permanent' ? 'Permanent license'
     : st.mode === 'offline_expired' ? 'Connect to the internet to check your plan.' : 'Your plan is not active. The app is read-only, but you can still export your data.';
   const locked = info && info.limit_locked_at ? (Date.now() < Date.parse(info.limit_locked_at) ? 'You can change the device number until ' + day(info.limit_locked_at) + '.' : 'The device number is locked.') : '';
   const activate = () => ask('Activation key', [{ k: 'key', label: 'Activation key' }, { k: 'n', label: 'Number of devices', type: 'number', v: '1' }], async v => {
@@ -81,7 +82,14 @@ export async function mount(root) {
     if (upload.classList.contains('loading')) return; upload.classList.add('loading'); pb.el.classList.remove('hidden'); pb.set(5);
     try { const n = await cloud.push(p => pb.set(p)); toast('Uploaded ' + n + ' records.'); await mount(root); } catch (e) { toast(e.message); upload.classList.remove('loading'); pb.el.classList.add('hidden'); }
   });
-  const histCard = card(h('b', {}, 'Sales history in the cloud'), h('p', { class: 'muted' }, lastPush ? 'Last upload ' + new Date(lastPush).toLocaleString() : 'Not uploaded yet.'), upload, pb.el);
+  const restore = h('button', { class: 'btn sec', type: 'button' }, 'Restore from cloud');
+  restore.addEventListener('click', async () => {
+    if (restore.classList.contains('loading')) return;
+    if (!(await confirmBox('Copy this shop\'s saved data from the cloud onto this device? Nothing on this device is overwritten.', 'Restore', false))) return;
+    restore.classList.add('loading');
+    try { toast('Restored ' + (await cloud.pull()) + ' records.'); } catch (e) { toast(e.message); } finally { restore.classList.remove('loading'); }
+  });
+  const histCard = card(h('b', {}, 'Sales history in the cloud'), h('p', { class: 'muted' }, lastPush ? 'Last upload ' + new Date(lastPush).toLocaleString() : 'Not uploaded yet.'), upload, restore, pb.el);
   const support = type => {
     if (!/^\d{11,15}$/.test(SUPPORT_WHATSAPP)) { toast('The support number is not set yet.'); return; }
     window.open('https://wa.me/' + SUPPORT_WHATSAPP + '?text=' + encodeURIComponent(type + '\nShop: ' + shop.name + '\nShop ID: ' + ((info && info.shop_id) || '-')), '_blank', 'noopener');
@@ -90,7 +98,7 @@ export async function mount(root) {
     h('hr'), h('div', { class: 'c' }, (tpl.policy ? tpl.policy + ' ' : '') + 'Returns need receipt no. R-0001'), h('div', { class: 'c' }, tpl.footer || 'Thank you!'));
 
   root.replaceChildren(
-    card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, planTxt), h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key')),
+    card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, planTxt), LEASE_PUBLIC_JWK ? null : h('p', { class: 'err' }, 'Plan security is off. Set the lease keys (see README).'), h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key')),
     devCard, csvCard, histCard,
     card(h('b', {}, 'Language'), h('div', { class: 'pills' }, [['en', 'English'], ['ru', 'Roman Urdu'], ['ur', 'اردو']].map(([c, n]) => pill(lang === c, n, async () => { await setLang(c); location.reload(); })))),
     card(h('b', {}, 'Receipt'), h('div', { class: 'pills' }, pill(tpl.width === '58', '58 mm', () => save({ width: '58' })), pill(tpl.width !== '58', '80 mm', () => save({ width: '80' }))),
