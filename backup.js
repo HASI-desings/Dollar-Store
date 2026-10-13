@@ -4,7 +4,7 @@ import { STORES, tx, all, req, uid } from './db.js';
 import { okRow } from './schema.js';
 const DATA = STORES.filter(s => s !== 'backups_log');
 // This device's own login and plan are never put in a backup file and never replaced by a restore.
-const KEEP = ['cloud_session', 'pin_lock', 'session', 'device', 'license_state', 'receipt_prefix', 'last_seen'];
+const KEEP = ['cloud_session', 'pin_lock', 'session', 'device', 'license_state', 'receipt_prefix', 'last_seen', 'lease'];
 const hex = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 export async function snapshot() {
