@@ -37,8 +37,10 @@ function draw() {
   const tags = prices.filter(p => p.category_id === sel).sort((a, b) => a.amount - b.amount)
     .map(p => h('button', { class: 'tag', type: 'button', 'data-p': p.id, onclick: () => add(cat, p) }, h('b', {}, rs(p.amount)), h('small', {}, p.label || cat.name)));
   tags.push(h('button', { class: 'tag dash', type: 'button', onclick: addPrice }, '+ Price'));
+  const sx = (root.querySelector('.pills') || {}).scrollLeft || 0;  // keep the category row where it was
   root.replaceChildren(held.length ? h('button', { class: 'pill', type: 'button', onclick: openHeld }, 'Held bills (' + held.length + ')') : null, h('div', { class: 'pills' }, pills), h('div', { class: 'grid' }, tags),
     n ? h('button', { class: 'billbar', type: 'button', onclick: openBill }, h('span', {}, n + (n === 1 ? ' item, ' : ' items, ') + rs(subtotal(bill.cart))), h('b', {}, t('Review'))) : null);
+  const rowEl = root.querySelector('.pills'); if (rowEl) rowEl.scrollLeft = sx;
 }
 
 function add(cat, p) {
@@ -62,6 +64,7 @@ function addCat() {
     if (!v.name) return 'Enter a name.';
     const c = { id: uid(), name: v.name, sort_order: cats.length, archived: false };
     await put('categories', c); cats.push(c); sel = c.id; draw();
+    const pl = root.querySelector('.pills'); if (pl) pl.scrollLeft = pl.scrollWidth;
   });
 }
 function addPrice() {
