@@ -118,6 +118,7 @@ addEventListener('unhandledrejection', e => (e.reason && e.reason.message === 'l
     gate(st);
     await staff.init();
     cloud.pushSoon(); setInterval(() => license.apply().then(gate).catch(() => null), 1800000);
+    setInterval(() => license.status().then(gate).catch(() => null), 60000);  // a trial that ends while the app is open blocks it within a minute
     ensurePersist().catch(() => toast('Could not check storage.'));
   } catch (e) { errorSheet(e.message === 'nodb' ? 'This browser is blocking storage.' : String(e.message)); }
   route();
