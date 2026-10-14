@@ -18,7 +18,7 @@ export function show(why) {
   const key = h('input', { type: 'text', 'aria-label': 'Activation key', onfocus: e => e.target.select() });
   const dev = h('input', { type: 'number', inputmode: 'numeric', value: '1', 'aria-label': 'Number of devices', onfocus: e => e.target.select() });
   const err = h('p', { class: 'err' });
-  const busy = async (btn, fn) => { if (btn.classList.contains('loading')) return; btn.classList.add('loading'); err.textContent = ''; try { await fn(); } catch (e) { err.textContent = e.message; } finally { btn.classList.remove('loading'); } };
+  const busy = async (btn, fn) => { if (btn.classList.contains('loading')) return; btn.classList.add('loading'); err.textContent = ''; try { await fn(); } catch (e) { err.textContent = e.message; toast(e.message, 'error'); } finally { btn.classList.remove('loading'); } };
   const pay = h('button', { class: 'btn ok full', type: 'button', onclick: () => {
     if (!/^\d{11,15}$/.test(SUPPORT_WHATSAPP)) { toast('The WhatsApp number is not set yet.'); return; }
     window.open('https://wa.me/' + SUPPORT_WHATSAPP + '?text=' + encodeURIComponent(MESSAGE), '_blank', 'noopener');
