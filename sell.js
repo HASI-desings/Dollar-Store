@@ -1,8 +1,8 @@
-import { h, toast, sheet, ask } from './ui.js';
+import { h, toast, sheet, ask, confirmBox } from './ui.js';
 import { all, put, tx, req, uid } from './db.js';
 import { rs, subtotal, receiptNo, waNumber } from './money.js';
 import { t } from './i18n.js';
-import { current, notify } from './staff.js';
+import { current, notify, requirePin } from './staff.js';
 import { pushSoon } from './cloud.js';
 
 const STARTER = ['Glass', 'Candle', 'Comb', 'Kitchen', 'Lamp', 'Toys', 'Other'];
@@ -17,8 +17,9 @@ const saveDraft = () => tx(['held_bills'], 'readwrite', s => { s.held_bills.put(
 
 export async function mount(el) {
   root = el;
-  cats = (await all('categories')).filter(c => !c.archived).sort((a, b) => a.sort_order - b.sort_order);
-  if (!cats.length) {
+  const allCats = await all('categories');
+  cats = allCats.filter(c => !c.archived).sort((a, b) => a.sort_order - b.sort_order);
+  if (!allCats.length) {
     cats = STARTER.map((name, i) => ({ id: uid(), name, sort_order: i, archived: false }));
     await tx(['categories'], 'readwrite', s => { cats.forEach(c => s.categories.put(c)); });
   }
@@ -26,16 +27,20 @@ export async function mount(el) {
   held = (await all('held_bills')).filter(x => x.id !== 'draft');
   const d = await tx(['held_bills'], 'readonly', s => req(s.held_bills.get('draft')));
   if (!bill.cart.length && d && d.cart.cart.length) { bill = d.cart; toast('We restored your unfinished bill.'); }
-  if (!cats.some(c => c.id === sel)) sel = cats[0].id;
+  if (!cats.some(c => c.id === sel)) sel = cats.length ? cats[0].id : null;
   draw();
 }
 
 function draw() {
   const n = bill.cart.reduce((a, l) => a + l.qty, 0), cat = cats.find(c => c.id === sel);
-  const pills = cats.map(c => h('button', { class: 'pill' + (c.id === sel ? ' on' : ''), type: 'button', onclick: () => { sel = c.id; draw(); } }, c.name));
+  const pills = cats.map(c => h('span', { class: 'pillwrap' + (c.id === sel ? ' on' : '') },
+    h('button', { class: 'pill' + (c.id === sel ? ' on' : ''), type: 'button', onclick: () => { sel = c.id; draw(); } }, c.name),
+    h('button', { class: 'px', type: 'button', 'aria-label': 'Remove category ' + c.name, onclick: () => removeCat(c) }, '×')));
   pills.push(h('button', { class: 'pill dash', type: 'button', onclick: addCat }, '+ Category'));
   const tags = prices.filter(p => p.category_id === sel).sort((a, b) => a.amount - b.amount)
-    .map(p => h('button', { class: 'tag', type: 'button', 'data-p': p.id, onclick: () => add(cat, p) }, h('b', {}, rs(p.amount)), h('small', {}, p.label || cat.name)));
+    .map(p => h('div', { class: 'tagwrap' },
+      h('button', { class: 'tag', type: 'button', 'data-p': p.id, onclick: () => add(cat, p) }, h('b', {}, rs(p.amount)), h('small', {}, p.label || cat.name)),
+      h('button', { class: 'tx', type: 'button', 'aria-label': 'Remove ' + (p.label || cat.name) + ' ' + rs(p.amount), onclick: () => removePrice(p) }, '×')));
   tags.push(h('button', { class: 'tag dash', type: 'button', onclick: addPrice }, '+ Price'));
   const sx = (root.querySelector('.pills') || {}).scrollLeft || 0;  // keep the category row where it was
   root.replaceChildren(held.length ? h('button', { class: 'pill', type: 'button', onclick: openHeld }, 'Held bills (' + held.length + ')') : null, h('div', { class: 'pills' }, pills), h('div', { class: 'grid' }, tags),
@@ -59,6 +64,34 @@ function openHeld() {
       await tx(['held_bills'], 'readwrite', s => { s.held_bills.delete(x.id); }); saveDraft(); close(); draw();
     } }, 'Resume'))) : [h('p', { class: 'muted' }, 'No held bills.')]));
 }
+let removing = false;
+// Owner-only removal: confirm, owner PIN, then ARCHIVE (never a hard delete, so old bills and reports stay readable).
+async function guarded(label, message, work, doneMsg) {
+  if (removing) return; removing = true;
+  try {
+    if (!(await confirmBox(message, 'Remove'))) return;
+    if (!(await requirePin(label))) { toast('Cancelled. Nothing was removed.'); return; }
+    await work(); toast(doneMsg); notify(label).catch(() => toast('Could not alert the owner.', 'error')); draw();
+  } catch (e) { toast(e.message === 'locked' ? 'Your plan is not active.' : 'Could not remove. Nothing was changed.', 'error'); }
+  finally { removing = false; }
+}
+function removeCat(c) {
+  return guarded('Remove category', 'Remove the category "' + c.name + '" and its price tags from the selling screen? Past bills keep their details.', async () => {
+    await tx(['categories', 'prices'], 'readwrite', async s => {
+      s.categories.put({ ...c, archived: true });
+      for (const p of await req(s.prices.getAll())) if (p.category_id === c.id && !p.archived) s.prices.put({ ...p, archived: true });
+    });
+    cats = cats.filter(x => x.id !== c.id); prices = prices.filter(p => p.category_id !== c.id);
+    if (sel === c.id) sel = cats.length ? cats[0].id : null;
+  }, 'Category removed.');
+}
+function removePrice(p) {
+  const name = (p.label || (cats.find(c => c.id === p.category_id) || {}).name || 'item') + ' ' + rs(p.amount);
+  return guarded('Remove price tag', 'Remove "' + name + '" from the selling screen? Past bills keep their details.', async () => {
+    await tx(['prices'], 'readwrite', s => { s.prices.put({ ...p, archived: true }); });
+    prices = prices.filter(x => x.id !== p.id);
+  }, 'Price tag removed.');
+}
 function addCat() {
   ask('New category', [{ k: 'name', label: 'Name' }], async v => {
     if (!v.name) return 'Enter a name.';
@@ -68,6 +101,7 @@ function addCat() {
   });
 }
 function addPrice() {
+  if (!sel) { toast('Add a category first.', 'error'); return; }
   ask('New price tag', [{ k: 'label', label: 'Name (optional)' }, { k: 'amount', label: 'Price (Rs)', type: 'number' }], async v => {
     const a = Number(v.amount);
     if (!Number.isInteger(a) || a <= 0 || a > 1000000) return 'Enter a price in whole rupees.';
