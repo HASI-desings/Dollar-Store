@@ -60,3 +60,9 @@ export async function activate(key, devices) {
   await put('settings', { key: 'license_state', value: cloud.stateFrom(info) });
   await apply(); return info;
 }
+// 'off' = no public key in the app. 'unverified' = key set but no valid signed lease yet. 'ok' = a signed lease checked out.
+export async function securityState() {
+  if (!LEASE_PUBLIC_JWK) return 'off';
+  const l = await get('lease'), d = await get('device'), p = l && (await verifyLease(l));
+  return p && d && p.device === d.id ? 'ok' : 'unverified';
+}
