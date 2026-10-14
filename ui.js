@@ -11,12 +11,12 @@ export function h(tag, attrs, ...kids) {
   for (const kid of kids.flat()) { if (kid != null && kid !== false) n.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
   return n;
 }
-export function toast(msg) {
+export function toast(msg, kind) {
   const box = document.getElementById('toasts') || document.body.appendChild(h('div', { id: 'toasts', class: 'toasts' }));
   let gone = false;
   const out = () => { if (gone) return; gone = true; t.classList.add('out'); setTimeout(() => t.remove(), 300); };
-  const t = h('div', { class: 'toast', role: 'status' }, h('span', {}, msg), h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: out }, '×'));
-  box.append(t); setTimeout(out, 3500);
+  const t = h('div', { class: 'toast' + (kind === 'error' ? ' error' : ''), role: 'status' }, h('span', {}, msg), h('button', { class: 'x', type: 'button', 'aria-label': 'Close', onclick: out }, '×'));
+  box.append(t); setTimeout(out, kind === 'error' ? 6000 : 3500);
 }
 // Bottom sheet. Returns a close function.
 export function sheet(content, onClose) {
@@ -33,9 +33,10 @@ export function sheet(content, onClose) {
 }
 export function errorSheet(details) {
   if (document.querySelector('.sheet[aria-label=Error]')) return;
+  const ref = 'ERR-' + Math.random().toString(36).slice(2, 8).toUpperCase();  // quote this to support
   let close;
-  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(String(details)).then(() => toast('Copied.'), () => toast('Could not copy.')) : toast('Could not copy.'));
-  close = sheet(h('div', { 'aria-label': 'Error' }, h('h2', {}, 'Something went wrong'), h('p', { class: 'muted' }, 'Your data is safe.'),
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(ref + ' ' + String(details)).then(() => toast('Copied.'), () => toast('Could not copy.')) : toast('Could not copy.'));
+  close = sheet(h('div', { 'aria-label': 'Error' }, h('h2', {}, 'Something went wrong'), h('p', { class: 'muted' }, 'Your data is safe. Reference: ' + ref + '.'),
     h('div', { class: 'row' }, h('button', { class: 'btn sec', type: 'button', onclick: copy }, 'Copy details'), h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Close'))));
   document.querySelector('.sheet:last-of-type').setAttribute('aria-label', 'Error');
 }
@@ -49,7 +50,7 @@ export function ask(title, fields, ok, cancel) {
     if (btn.classList.contains('loading')) return;
     const v = {}; for (const f of fields) v[f.k] = inp[f.k].value.trim();
     btn.classList.add('loading'); err.textContent = '';
-    try { const m = await ok(v); if (m) err.textContent = m; else close(); } finally { btn.classList.remove('loading'); }
+    try { const m = await ok(v); if (m) { err.textContent = m; toast(m, 'error'); } else close(); } finally { btn.classList.remove('loading'); }
   });
   close = sheet(h('div', {}, h('h2', {}, title), rows, err, btn), cancel);
 }
