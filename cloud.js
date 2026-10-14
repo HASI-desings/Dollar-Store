@@ -97,3 +97,10 @@ export async function pull() {
   if (mx > ((await get('receipt_counter')) || 0)) await put('settings', { key: 'receipt_counter', value: mx });
   return added;
 }
+// The PUBLIC half of the plan-signing key (safe to share). The private half stays inside Supabase.
+export async function publicKey() {
+  let r; try { r = await fetch(U + '/functions/v1/lease', { method: 'POST', headers: { apikey: K, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'public_key' }) }); } catch (e) { throw new Error('No internet connection.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.public_jwk) throw new Error(j.message || 'The lease function is not deployed yet.');
+  return j.public_jwk;
+}
