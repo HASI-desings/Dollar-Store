@@ -14,7 +14,7 @@ const key = s => String(s).trim().toLowerCase();
 export async function mount(root) {
   root.replaceChildren(skel('cards'));
   const shop = (await get('shop')) || { name: 'My Store', address: '', phone: '' }, tpl = (await get('receipt')) || { width: '80', footer: 'Thank you!', policy: '' };
-  const st = await license.status(), info = await get('license_state'), lastPush = await get('last_push');
+  const st = await license.status(), info = await get('license_state'), lastPush = await get('last_push'), sec = await license.securityState();
   let devs = null, devErr = '';
   try { devs = await cloud.listDevices(); } catch (e) { devErr = e.message; }
   const card = (...k) => h('section', { class: 'card' }, ...k);
@@ -22,6 +22,14 @@ export async function mount(root) {
   const save = async n => { await put('settings', { key: 'receipt', value: { ...tpl, ...n } }); await mount(root); };
   const row = (a, b) => h('div', { class: 'rw' }, h('span', {}, a), h('span', {}, b));
 
+  // The public key is safe to show. The private key never leaves Supabase.
+  const showKey = async () => {
+    try {
+      const jwk = JSON.stringify(await cloud.publicKey());
+      sheet(h('div', {}, h('h2', {}, 'Public key'), h('p', { class: 'muted' }, 'Paste this whole line into lease-key.js, replacing null, then redeploy. It is safe to share.'), h('p', { class: 'linkbox' }, jwk),
+        h('button', { class: 'btn full', type: 'button', onclick: () => (navigator.clipboard ? navigator.clipboard.writeText(jwk).then(() => toast('Copied.'), () => toast('Could not copy.', 'error')) : toast('Could not copy.', 'error')) }, 'Copy')));
+    } catch (e) { toast(e.message, 'error'); }
+  };
   // ----- plan, activation, devices
   const planTxt = st.mode === 'trial' ? 'Free trial: ' + st.left + (st.left === 1 ? ' day' : ' days') + ' left' : st.mode === 'subscription' ? 'Subscription active until ' + day(st.until) : st.mode === 'permanent' ? 'Permanent license'
     : st.mode === 'offline_expired' ? 'Connect to the internet to check your plan.' : 'Your plan is not active. The app is read-only, but you can still export your data.';
@@ -98,7 +106,9 @@ export async function mount(root) {
     h('hr'), h('div', { class: 'c' }, (tpl.policy ? tpl.policy + ' ' : '') + 'Returns need receipt no. R-0001'), h('div', { class: 'c' }, tpl.footer || 'Thank you!'));
 
   root.replaceChildren(
-    card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, planTxt), LEASE_PUBLIC_JWK ? null : h('p', { class: 'err' }, 'Plan security is off. Set the lease keys (see README).'), h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key')),
+    card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, planTxt), ...(sec === 'ok' ? [h('p', { class: 'muted' }, 'Plan security: verified.')] : sec === 'off'
+      ? [h('p', { class: 'err' }, 'Plan security is off. Get the public key, paste it into lease-key.js and redeploy.'), h('button', { class: 'btn sec', type: 'button', onclick: showKey }, 'Get the public key')]
+      : [h('p', { class: 'err' }, 'Plan security is set but not verified yet. Connect to the internet and reopen the app.')]), h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key')),
     devCard, csvCard, histCard,
     card(h('b', {}, 'Language'), h('div', { class: 'pills' }, [['en', 'English'], ['ru', 'Roman Urdu'], ['ur', 'اردو']].map(([c, n]) => pill(lang === c, n, async () => { await setLang(c); location.reload(); })))),
     card(h('b', {}, 'Receipt'), h('div', { class: 'pills' }, pill(tpl.width === '58', '58 mm', () => save({ width: '58' })), pill(tpl.width !== '58', '80 mm', () => save({ width: '80' }))),
