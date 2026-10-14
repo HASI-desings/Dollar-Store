@@ -56,7 +56,7 @@ button,input,select{font:inherit;color:inherit}
 .lnk{display:flex;justify-content:space-between;align-items:center;min-height:56px;color:var(--text);text-decoration:none;border-bottom:1px solid var(--line)}
 .back{display:inline-flex;align-items:center;min-height:48px;color:var(--text-2);text-decoration:none}
 .bar2{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden;margin:8px 0}.bar2 i{display:block;height:100%;background:var(--ok);transform:scaleX(var(--w,0));transform-origin:left;transition:transform 600ms var(--curve)}.bar2.bad i{background:var(--bad)}.bar2.gold i{background:var(--tag)}
-.num{font-size:34px;font-weight:800}.stat{display:flex;justify-content:space-between;padding:8px 0}.card .btn+.btn{margin-left:8px}
+.num{font-size:34px;font-weight:800}.stat{display:flex;justify-content:space-between;padding:8px 0}
 .setup{position:fixed;inset:0;z-index:100;background:var(--bg);padding:calc(var(--top) + 24px) 20px 24px;overflow:auto;max-width:560px;margin:0 auto}
 .setup h1{font-size:34px;margin:24px 0}.prog{height:3px;background:var(--surface-2);overflow:hidden}.prog i{display:block;height:100%;background:var(--ink);transform:scaleX(var(--w,0));transform-origin:left;transition:transform 300ms var(--curve)}
 .opt{display:block;width:100%;margin-bottom:12px}.setup select{width:100%;height:52px;border:0;border-radius:12px;background:var(--surface-2);padding:0 14px}
@@ -118,3 +118,18 @@ html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
 .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .stat-tile.tap{text-align:left;font:inherit;color:inherit;cursor:pointer;transition:transform 160ms var(--curve)}.stat-tile.tap:active{transform:scale(.97)}
 .linkbox{word-break:break-all;background:var(--surface-2);border-radius:12px;padding:12px;font-size:14px;user-select:all}
+
+/* Buttons: ONE shared layout. Directly in a card they stack full width on phones, sit side by side from 600px, and never overlap. */
+.card>.btn,.card>a.btn,.card>label.btn{display:flex;align-items:center;justify-content:center;width:100%;margin:12px 0 0;text-align:center;text-decoration:none}
+@media(min-width:600px){.card>.btn,.card>a.btn,.card>label.btn{display:inline-flex;width:auto;margin:12px 12px 0 0}}
+.card>.btn.full{width:100%;margin-right:0}
+.view>div>.btn,.view>div>div>.btn{display:flex;align-items:center;justify-content:center;width:100%;max-width:360px;margin:0 0 12px}
+.setup .btn{display:flex;align-items:center;justify-content:center;width:100%;margin:12px 0 0}
+/* Remove (x) controls: small and secondary */
+.pillwrap{display:inline-flex;align-items:center;flex:none;background:var(--surface);border-radius:999px}
+.pillwrap.on{background:var(--ink);color:var(--on-ink)}
+.pillwrap .pill,.pillwrap .pill.on{background:none;color:inherit;padding-right:4px}
+.px,.tx{flex:none;width:28px;height:28px;border:0;border-radius:50%;background:rgba(127,127,127,.2);color:inherit;opacity:.6;font-size:16px;line-height:1;cursor:pointer;padding:0;position:relative}
+.px{margin-right:10px}.px::before,.tx::before{content:"";position:absolute;inset:-8px}
+.tagwrap{position:relative}.tagwrap .tag{width:100%}.tx{position:absolute;top:6px;right:8px;color:#14213D;background:rgba(20,33,61,.15)}
+.toast.error{background:var(--bad);color:#fff}
