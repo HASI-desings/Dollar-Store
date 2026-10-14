@@ -19,7 +19,11 @@ export async function mount(root) {
   const toggle = async () => { if (!loaded) { loaded = true; await backup.mount(panel); } panel.classList.toggle('hidden'); };
   const link = (id, n) => h('a', { class: 'lnk', href: '#/' + id }, n, h('span', {}, '›'));
   const bar = progress(); bar.set(Math.min(used / LIMIT, 1) * 100); bar.el.classList.toggle('bad', used / LIMIT > 0.8);
+  // iPhone Safari erases a website's saved data after 7 days without use, unless the app is added to the Home Screen.
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const iosWarn = ios && !installed ? h('section', { class: 'card' }, h('b', {}, 'Add this app to your Home Screen'), h('p', { class: 'err' }, 'Safari erases saved website data after 7 days without use. Tap Share, then Add to Home Screen, and open the app from there so your shop data stays.')) : null;
   root.replaceChildren(
+    iosWarn,
     h('section', { class: 'card' }, h('b', {}, shop.name), h('p', { class: 'muted' }, [shop.address, shop.phone].filter(Boolean).join(' · ') || 'No address or phone yet.'), h('button', { class: 'btn sec', type: 'button', onclick: edit }, 'Edit shop details')),
     h('section', { class: 'card' }, h('button', { class: 'lnk btnlink', type: 'button', onclick: toggle }, 'Backup and restore', h('span', {}, '›')), panel, link('staff', 'Staff and roles'), link('settings', 'Settings')),
     h('section', { class: 'card' }, h('b', {}, 'Storage on this device'), h('p', { class: 'muted' }, fmt(used) + ' of 500 MB'), bar.el, used > LIMIT ? h('p', { class: 'err' }, 'Local data is over 500 MB. Back up now for safety.') : null));
