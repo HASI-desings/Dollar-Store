@@ -42,7 +42,7 @@ export async function mount(root) {
   // The plan card follows the shared plan state. Permanent shows no activation menu at all.
   const cur = await license.evaluate(), S = cur.state;
   const pay = h('button', { class: 'btn ok', type: 'button', onclick: () => openPay(S) }, 'Pay to unlock');
-  const enterKey = h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key');
+  const enterKey = h('button', { class: 'btn', type: 'button', onclick: () => activate() }, 'Enter activation key');  // activate is defined further down, so call it only on tap
   const recheck = h('button', { class: 'btn sec', type: 'button', onclick: () => license.apply() }, 'Check again');
   let planCards;
   if (S === 'activated' && cur.kind === 'permanent') planCards = [card(h('p', { class: 'muted' }, 'Permanent license'))];
