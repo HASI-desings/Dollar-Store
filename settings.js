@@ -6,13 +6,17 @@ import * as license from './license.js';
 import * as cloud from './cloud.js';
 import { readPrices, planImport } from './csv.js';
 import { SUPPORT_WHATSAPP } from './config.js';
+import { openPay } from './paywall.js';
 import { LEASE_PUBLIC_JWK } from './lease-key.js';
 const get = async k => (await tx(['settings'], 'readonly', s => req(s.settings.get(k))))?.value;
 const day = d => new Date(d).toLocaleDateString();
 const key = s => String(s).trim().toLowerCase();
+let unsub = null;
 
 export async function mount(root) {
   root.replaceChildren(skel('cards'));
+  if (unsub) unsub();
+  unsub = license.onChange(() => { if (root.isConnected) mount(root); else unsub(); });  // redraw when the plan changes, no refresh needed
   const shop = (await get('shop')) || { name: 'My Store', address: '', phone: '' }, tpl = (await get('receipt')) || { width: '80', footer: 'Thank you!', policy: '' };
   const st = await license.status(), info = await get('license_state'), lastPush = await get('last_push'), sec = await license.securityState();
   let devs = null, devErr = '';
@@ -30,14 +34,28 @@ export async function mount(root) {
         h('button', { class: 'btn full', type: 'button', onclick: () => (navigator.clipboard ? navigator.clipboard.writeText(jwk).then(() => toast('Copied.'), () => toast('Could not copy.', 'error')) : toast('Could not copy.', 'error')) }, 'Copy')));
     } catch (e) { toast(e.message, 'error'); }
   };
+  // Developer-only details live here, quietly, so a customer never sees a red warning.
+  const devInfo = h('details', { class: 'card' }, h('summary', {}, 'Developer info'),
+    h('p', { class: 'muted' }, sec === 'ok' ? 'Plan security: verified.' : sec === 'off' ? 'Plan security: public key not set in lease-key.js.' : 'Plan security: key set, waiting for a signed plan from the server.'),
+    ...(sec === 'off' ? [h('button', { class: 'btn sec', type: 'button', onclick: showKey }, 'Get the public key')] : []));
   // ----- plan, activation, devices
-  const planTxt = st.mode === 'trial' ? 'Free trial: ' + st.left + (st.left === 1 ? ' day' : ' days') + ' left' : st.mode === 'subscription' ? 'Subscription active until ' + day(st.until) : st.mode === 'permanent' ? 'Permanent license'
-    : st.mode === 'offline_expired' ? 'Connect to the internet to check your plan.' : 'Your plan is not active. The app is read-only, but you can still export your data.';
+  // The plan card follows the shared plan state. Permanent shows no activation menu at all.
+  const cur = await license.evaluate(), S = cur.state;
+  const pay = h('button', { class: 'btn ok', type: 'button', onclick: () => openPay(S) }, 'Pay to unlock');
+  const enterKey = h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key');
+  const recheck = h('button', { class: 'btn sec', type: 'button', onclick: () => license.apply() }, 'Check again');
+  let planCards;
+  if (S === 'activated' && cur.kind === 'permanent') planCards = [card(h('p', { class: 'muted' }, 'Permanent license'))];
+  else if (S === 'activated') planCards = [card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, 'Subscription active until ' + day(cur.until)), enterKey)];
+  else if (S === 'trial_active') planCards = [card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, 'Free trial active · ' + cur.left + (cur.left === 1 ? ' day' : ' days') + ' left'), pay, enterKey)];
+  else if (S === 'activation_pending') planCards = [card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, 'Checking your key…'))];
+  else if (S === 'verification_required') planCards = [card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, "We couldn't verify your plan right now. Check your connection."), recheck)];
+  else planCards = [card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, 'Your plan is not active.'), pay, enterKey)];
   const locked = info && info.limit_locked_at ? (Date.now() < Date.parse(info.limit_locked_at) ? 'You can change the device number until ' + day(info.limit_locked_at) + '.' : 'The device number is locked.') : '';
   const activate = () => ask('Activation key', [{ k: 'key', label: 'Activation key' }, { k: 'n', label: 'Number of devices', type: 'number', v: '1' }], async v => {
     const n = Number(v.n); if (!v.key) return 'Enter the key.'; if (!Number.isInteger(n) || n < 1) return 'Enter the number of devices.';
-    try { await license.activate(v.key, n); } catch (e) { return e.message; }
-    toast('Activated.'); await mount(root);
+    let res; try { res = await license.activate(v.key, n); } catch (e) { return e.message; }  // e.message is already customer-safe
+    toast(res.state === 'activated' ? 'Activated.' : 'Key accepted. Your plan will update when we can confirm it.');
   });
   const changeLimit = () => ask('Number of devices', [{ k: 'n', label: 'Devices', type: 'number', v: String(info.device_limit) }], async v => {
     try { await cloud.setLimit(Number(v.n)); } catch (e) { return e.message; }
@@ -106,15 +124,14 @@ export async function mount(root) {
     h('hr'), h('div', { class: 'c' }, (tpl.policy ? tpl.policy + ' ' : '') + 'Returns need receipt no. R-0001'), h('div', { class: 'c' }, tpl.footer || 'Thank you!'));
 
   root.replaceChildren(
-    card(h('b', {}, 'Your plan'), h('p', { class: 'muted' }, planTxt), ...(sec === 'ok' ? [h('p', { class: 'muted' }, 'Plan security: verified.')] : sec === 'off'
-      ? [h('p', { class: 'err' }, 'Plan security is off. Get the public key, paste it into lease-key.js and redeploy.'), h('button', { class: 'btn sec', type: 'button', onclick: showKey }, 'Get the public key')]
-      : [h('p', { class: 'err' }, 'Plan security is set but not verified yet. Connect to the internet and reopen the app.')]), h('button', { class: 'btn', type: 'button', onclick: activate }, 'Enter activation key')),
+    ...planCards,
     devCard, csvCard, histCard,
     card(h('b', {}, 'Language'), h('div', { class: 'pills' }, [['en', 'English'], ['ru', 'Roman Urdu'], ['ur', 'اردو']].map(([c, n]) => pill(lang === c, n, async () => { await setLang(c); location.reload(); })))),
     card(h('b', {}, 'Receipt'), h('div', { class: 'pills' }, pill(tpl.width === '58', '58 mm', () => save({ width: '58' })), pill(tpl.width !== '58', '80 mm', () => save({ width: '80' }))),
       h('button', { class: 'btn sec', type: 'button', onclick: () => ask('Footer and return policy', [{ k: 'footer', label: 'Footer line', v: tpl.footer }, { k: 'policy', label: 'Return policy', v: tpl.policy }], async v => { await save(v); }) }, 'Footer and policy'), h('p', { class: 'muted' }, 'Live preview'), preview),
     card(h('b', {}, 'Support'), h('button', { class: 'btn sec', type: 'button', onclick: () => support('Problem report') }, 'Report a problem'), h('button', { class: 'btn sec', type: 'button', onclick: () => support('Change request') }, 'Request a change')),
     card(h('b', {}, 'Help'), h('p', { class: 'muted' }, 'Android: Chrome menu, Install app. Windows or Linux: install icon in the address bar. iPhone: Safari, Share, Add to Home Screen. Printing: use Print on the receipt (80 mm or 58 mm). iPhone has no Bluetooth printing from a web app: use AirPrint, Save PDF or WhatsApp.')),
+    devInfo,
     card(h('button', { class: 'btn sec', type: 'button', onclick: () => ask('Erase all local data', [{ k: 'n', label: 'Type the shop name to confirm' }], async v => {
       if (v.n !== shop.name) return 'The name does not match.';
       if (!(await requirePin('Erase data'))) return 'Cancelled.';
