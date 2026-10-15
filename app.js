@@ -44,7 +44,7 @@ function route() {
   const chip = h('span', { class: 'chip', id: 'chip' }, 'Offline');
   view.replaceChildren(h('header', { class: 'head' }, h('div', {}, p.tab != null ? h('a', { class: 'back', href: '#/' + PAGES[p.tab].id }, '‹ ' + t(PAGES[p.tab].title)) : null, h('h1', {}, t(p.title))), p.id === 'sell' ? chip : null), body);
   view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter');
-  Promise.resolve(p.mount(body)).catch(e => body.replaceChildren(errorEl(e)));
+  Promise.resolve(p.mount(body)).catch(e => { console.error('Page failed to load:', p.id, e); body.replaceChildren(errorEl(e)); });
   tabs.style.setProperty('--i', i);
   tabs.querySelectorAll('.tab').forEach((a, k) => a.classList.toggle('active', k === i));
   barTitle.textContent = t(p.title); tabs.querySelectorAll('.tab span').forEach((sp, k) => { sp.textContent = t(PAGES[k].title); }); window.scrollTo(0, 0); onScroll(); updateChip();
