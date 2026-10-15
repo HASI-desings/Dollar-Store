@@ -18,8 +18,14 @@ export function open() {
 // Run fn(stores) in ONE transaction. fn may await requests only. Resolves with fn's result after commit.
 export let locked = false;
 export const setLock = v => { locked = v; };
+// When the plan has a known end time, writes are blocked from that moment, even before the screen has redrawn.
+export let lockAt = null;
+export const setLockAt = v => { lockAt = v; };
+let lockHook = null;
+export const setLockHook = fn => { lockHook = fn; };
 export async function tx(names, mode, fn) {
   // Read-only mode (trial over): only settings, drafts and the backup log may be written.
+  if (!locked && lockAt && Date.now() >= lockAt) { locked = true; if (lockHook) lockHook(); }
   if (locked && mode === 'readwrite' && !names.every(n => ['settings', 'backups_log', 'held_bills'].includes(n))) throw new Error('locked');
   const d = await open();
   return new Promise((res, rej) => {
