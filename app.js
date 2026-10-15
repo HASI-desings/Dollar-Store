@@ -66,8 +66,15 @@ const updateChip = () => { const c = document.getElementById('chip'); if (c) c.c
 addEventListener('online', updateChip); addEventListener('offline', updateChip);
 
 // A new service worker waits until the app is fully closed, so an open bill is never interrupted.
-// When the plan is not active the whole app is blocked until it is paid.
-function gate(st) { if (!['trial', 'subscription', 'permanent'].includes(st.mode)) paywall.show(st.mode === 'expired' ? st.why : 'offline_expired'); }
+// One place decides what the plan means for the screen: blocked when it is not active, redrawn the moment it is.
+let lastState = null;
+function planChanged(s) {
+  paywall.sync(s);
+  if (s.state === 'activation_pending') return;
+  const open = x => ['trial_active', 'activated'].includes(x);
+  if (open(s.state) && lastState && !open(lastState)) route();
+  lastState = s.state;
+}
 // Asks the browser not to delete this app's data when it needs space.
 async function ensurePersist() {
   if (!navigator.storage || !navigator.storage.persist || (await navigator.storage.persisted())) return;
@@ -114,11 +121,10 @@ addEventListener('unhandledrejection', e => (e.reason && e.reason.message === 'l
     else if (jm) { toast('This device is already set up.'); location.hash = '#/sell'; }
     const need = await setup.needed();
     if (need) await setup.run(need);
-    const st = await license.apply();
-    gate(st);
+    license.onChange(planChanged);
+    await license.apply();
     await staff.init();
-    cloud.pushSoon(); setInterval(() => license.apply().then(gate).catch(() => null), 1800000);
-    setInterval(() => license.status().then(gate).catch(() => null), 60000);  // a trial that ends while the app is open blocks it within a minute
+    cloud.pushSoon(); license.watch();
     ensurePersist().catch(() => toast('Could not check storage.'));
   } catch (e) { errorSheet(e.message === 'nodb' ? 'This browser is blocking storage.' : String(e.message)); }
   route();
